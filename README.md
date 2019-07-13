@@ -3,12 +3,11 @@ $ node -v
 
 v10.11.0
 
-# install dependencies for test, compile sqlite for electron
+# install dependencies, compile sqlite for electron
 $ npm install
 
 $ npm run sqlite3
 
-# install dependencies for build, compile sqlite for electron
 $ cd dist
 
 $ npm install
