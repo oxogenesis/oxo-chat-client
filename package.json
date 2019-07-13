@@ -5,7 +5,7 @@
   "author": "obeTvR9XDbUwquA6JPQhmbgaCCaiFa2rvf",
   "private": true,
   "scripts": {
-    "rebuild": "npm rebuild --runtime=electron --target=4.0.0 --disturl=https://atom.io/download/atom-shell --abi=69",
+    "sqlite3": "npm rebuild --runtime=electron --target=4.0.0 --disturl=https://atom.io/download/atom-shell --abi=69",
     "dev": "webpack-dev-server --inline --progress --config build/webpack.dev.conf.js",
     "start": "npm run dev",
     "test": "node build/build.js && electron ./dist",
