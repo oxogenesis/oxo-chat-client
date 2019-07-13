@@ -1,5 +1,6 @@
 # install node environment, must be v10.11.0
 $ node -v
+
 v10.11.0
 
 # install dependencies for test, compile sqlite for electron
