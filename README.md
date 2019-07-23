@@ -8,8 +8,11 @@
 **[3.业务消息](https://github.com/oxogenesis/oxo-chat-client/wiki/3.%E4%B8%9A%E5%8A%A1%E6%B6%88%E6%81%AF)**  
 
 # test server
-**wss://ru.oxo-chat-server.com**  
+* **wss://ru.oxo-chat-server.com**  
 
+I would like to point a subdomain to your ip, if you want to provide service for the public, you could create a issue with label **public service**.  
+You could use servers other people provided to contact you friends.  
+Or you could setup your own service just for your friends  
 
 # run code
 * install node environment, must be v10.11.0  
@@ -32,3 +35,6 @@ $ npm run test
 
 * build  
 $ npm run build  
+
+# release
+**[download page](https://github.com/oxogenesis/oxo-chat-client/releases)**  
