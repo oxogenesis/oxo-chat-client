@@ -13,7 +13,7 @@
 # public server
 * **wss://ru.oxo-chat-server.com**  
 
-I would like to point a subdomain to your ip, if you want to provide service for the public。  
+I would like to point a subdomain to your ip, if you want to provide service for the public.  
 You could create a issue to submit your ip and other info of your server.  
 You could use servers other people provided to contact you friends.  
 Or you could setup your own server just for your friends.  
