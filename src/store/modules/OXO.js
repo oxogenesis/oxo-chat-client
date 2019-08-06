@@ -48,10 +48,16 @@ const state = {
     "Declare": 200,
     "Bulletin": 201,
     "BulletinRequest": 202,
-    "BulletinResponse": 203,
-    "DHPublicKey": 204,
+    "ObjectResponse": 203,
+    "ChatDH": 204,
     "ChatMessage": 205,
-    "ChatSync": 206
+    "ChatSync": 206,
+
+    "GroupManage": 210,
+    "GroupManageSync": 211,
+    "GroupDH": 212,
+    "GroupMessage": 213,
+    "GroupMessageSync": 214
   },
   DefaultDivision: 3,
 
@@ -592,7 +598,7 @@ const mutations = {
           }
           json["Signature"] = sig
 
-          if (json.Action == state.ActionCode.DHPublicKey) {
+          if (json.Action == state.ActionCode.ChatDH) {
             //check message from my friend
             let address = oxoKeyPairs.deriveAddress(json.PublicKey)
             if (!state.Friends.includes(address)) {
@@ -619,7 +625,7 @@ const mutations = {
 
                   //gen message with my-pk, indicate self ready
                   let selfJson = {
-                    "Action": state.ActionCode.DHPublicKey,
+                    "Action": state.ActionCode.ChatDH,
                     "Division": json.Division,
                     "Sequence": json.Sequence,
                     "DHPublicKey": ecdh_pk,
@@ -654,7 +660,7 @@ const mutations = {
 
                   //gen self-ready-json
                   let selfJson = {
-                    "Action": state.ActionCode.DHPublicKey,
+                    "Action": state.ActionCode.ChatDH,
                     "Division": json.Division,
                     "Sequence": json.Sequence,
                     "DHPublicKey": ecdh_pk,
@@ -787,8 +793,8 @@ const mutations = {
                   bulletin = JSON.parse(item.json)
                 }
                 let json = {
-                  "Action": state.ActionCode.BulletinResponse,
-                  "Bulletin": bulletin,
+                  "Action": state.ActionCode.ObjectResponse,
+                  "Object": bulletin,
                   "To": address,
                   "Timestamp": Date.now(),
                   "PublicKey": state.PublicKey,
@@ -799,9 +805,9 @@ const mutations = {
                 state.WS.send(strJson)
               }
             })
-          } else if (json.Action == state.ActionCode.BulletinResponse) {
+          } else if (json.Action == state.ActionCode.ObjectResponse) {
             //console.log(json)
-            json = json.Bulletin
+            json = json.Object
             //console.log(json)
             if (checkBulletinSchema(json)) {
               let address = oxoKeyPairs.deriveAddress(json.PublicKey)
@@ -957,7 +963,7 @@ const mutations = {
           let ecdh_sk = ecdh.getPrivateKey('hex')
 
           let json = {
-            "Action": state.ActionCode.DHPublicKey,
+            "Action": state.ActionCode.ChatDH,
             "Division": division,
             "Sequence": sequence,
             "DHPublicKey": ecdh_pk,

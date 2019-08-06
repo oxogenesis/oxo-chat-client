@@ -18,7 +18,7 @@ let DeclareSchema = {
       "type": "string"
     }
   }
-};
+}
 
 //>>>bulletin<<<
 let BulletinSchema = {
@@ -62,7 +62,7 @@ let BulletinSchema = {
       "type": "string"
     }
   }
-};
+}
 
 let BulletinRequestSchema = {
   "type": "object",
@@ -91,17 +91,17 @@ let BulletinRequestSchema = {
       "type": "string"
     }
   }
-};
+}
 
-let BulletinResponseSchema = {
+let ObjectResponseSchema = {
   "type": "object",
-  "required": ["Action", "Bulletin", "To", "Timestamp", "PublicKey", "Signature"],
+  "required": ["Action", "Object", "To", "Timestamp", "PublicKey", "Signature"],
   "maxProperties": 6,
   "properties": {
     "Action": {
       "type": "number"
     },
-    "Bulletin": {
+    "Object": {
       "type": "object"
     },
     "To": {
@@ -117,7 +117,7 @@ let BulletinResponseSchema = {
       "type": "string"
     }
   }
-};
+}
 
 //>>>chat<<<
 let ChatMessageSchema = {
@@ -158,7 +158,7 @@ let ChatMessageSchema = {
       "type": "string"
     }
   }
-};
+}
 
 let ChatSyncSchema = {
   "type": "object",
@@ -184,10 +184,10 @@ let ChatSyncSchema = {
       "type": "string"
     }
   }
-};
+}
 
-//DH PublicKey
-let DHPublicKeySchema = {
+//ChatDH
+let ChatDHSchema = {
   "type": "object",
   "required": ["Action", "Division", "Sequence", "DHPublicKey", "Pair", "To", "Timestamp", "PublicKey", "Signature"],
   "maxProperties": 9,
@@ -220,7 +220,209 @@ let DHPublicKeySchema = {
       "type": "string"
     }
   }
-};
+}
+
+//>>>group<<<
+//group request
+let GroupRequestSchema = {
+  "type": "object",
+  "required": ["Action", "GroupHash", "SubAction", "To", "Timestamp", "PublicKey", "Signature"],
+  "maxProperties": 7,
+  "properties": {
+    "Action": {
+      "type": "number"
+    },
+    "GroupHash": {
+      "type": "string"
+    },
+//leave:0
+//join:1
+    "SubAction": {
+      "type": "number"
+    },
+    "To": {
+      "type": "string"
+    },
+    "Timestamp": {
+      "type": "number"
+    },
+    "PublicKey": {
+      "type": "string"
+    },
+    "Signature": {
+      "type": "string"
+    }
+  }
+}
+
+//group control for group admin
+let GroupManageSchema = {
+  "type": "object",
+  "required": ["Action", "GroupHash", "Sequence", "PreHash", "SubAction", "Timestamp", "PublicKey", "Signature"],
+  "maxProperties": 9,
+  "properties": {
+    "Action": {
+      "type": "number"
+    },
+    "GroupHash": {
+      "type": "string"
+    },
+    "Sequence": {
+      "type": "number"
+    },
+    "PreHash": {
+      "type": "string"
+    },
+//dismiss:0
+//create:1
+//member approve:2   need Request
+//remove member:3
+//member release:4   need Request
+    "SubAction": {
+      "type": "string"
+    },
+    "Request": {
+      "type": "object"
+    },
+    "Timestamp": {
+      "type": "number"
+    },
+    "PublicKey": {
+      "type": "string"
+    },
+    "Signature": {
+      "type": "string"
+    }
+  }
+}
+
+let GroupManageSyncSchema = {
+  "type": "object",
+  "required": ["Action", "GroupHash", "CurrentSequence", "To", "Timestamp", "PublicKey", "Signature"],
+  "maxProperties": 7,
+  "properties": {
+    "Action": {
+      "type": "number"
+    },
+    "GroupHash": {
+      "type": "string"
+    },
+    "CurrentSequence": {
+      "type": "number"
+    },
+    "To": {
+      "type": "string"
+    },
+    "Timestamp": {
+      "type": "number"
+    },
+    "PublicKey": {
+      "type": "string"
+    },
+    "Signature": {
+      "type": "string"
+    }
+  }
+}
+
+let GroupDHSchema = {
+  "type": "object",
+  "required": ["Action", "GroupHash", "DHPublicKey", "Pair", "To", "Timestamp", "PublicKey", "Signature"],
+  "maxProperties": 8,
+  "properties": {
+    "Action": {
+      "type": "number"
+    },
+    "GroupHash": {
+      "type": "string"
+    },
+    "DHPublicKey": {
+      "type": "string"
+    },
+    "Pair": {
+      "type": "string"
+    },
+    "To": {
+      "type": "string"
+    },
+    "Timestamp": {
+      "type": "number"
+    },
+    "PublicKey": {
+      "type": "string"
+    },
+    "Signature": {
+      "type": "string"
+    }
+  }
+}
+
+let GroupMessageSchema = {
+  "type": "object",
+  "required": ["Action", "GroupHash", "Sequence", "PreHash", "Confirm", "Content", "Timestamp", "PublicKey", "Signature"],
+  "maxProperties": 9,
+  "properties": {
+    "Action": {
+      "type": "number"
+    },
+    "GroupHash": {
+      "type": "string"
+    },
+    "Sequence": {
+      "type": "number"
+    },
+    "PreHash": {
+      "type": "string"
+    },
+    "Confirm": {
+      "type": "string"
+    },
+    "Content": {
+      "type": "string"
+    },
+    "To": {
+      "type": "string"
+    },
+    "Timestamp": {
+      "type": "number"
+    },
+    "PublicKey": {
+      "type": "string"
+    },
+    "Signature": {
+      "type": "string"
+    }
+  }
+}
+
+let GroupMessageSyncSchema = {
+  "type": "object",
+  "required": ["Action", "GroupHash", "MessageHash", "To", "Timestamp", "PublicKey", "Signature"],
+  "maxProperties": 7,
+  "properties": {
+    "Action": {
+      "type": "number"
+    },
+    "GroupHash": {
+      "type": "string"
+    },
+    "MessageHash": {
+      "type": "string"
+    },
+    "To": {
+      "type": "string"
+    },
+    "Timestamp": {
+      "type": "number"
+    },
+    "PublicKey": {
+      "type": "string"
+    },
+    "Signature": {
+      "type": "string"
+    }
+  }
+}
 //end client schema
 
 var Ajv = require('ajv');
@@ -229,16 +431,16 @@ var ajv = new Ajv({ allErrors: true });
 //client
 var vDeclare = ajv.compile(DeclareSchema);
 var vBulletinRequestSchema = ajv.compile(BulletinRequestSchema);
-var vBulletinResponseSchema = ajv.compile(BulletinResponseSchema);
+var vObjectResponseSchema = ajv.compile(ObjectResponseSchema);
 var vChatMessageSchema = ajv.compile(ChatMessageSchema);
 var vChatSyncSchema = ajv.compile(ChatSyncSchema);
-var vDHPublicKeySchema = ajv.compile(DHPublicKeySchema);
+var vChatDHSchema = ajv.compile(ChatDHSchema);
 
 function checkJsonSchema(strJson) {
   if (typeof strJson == "string") {
     try {
       let json = JSON.parse(strJson);
-      if (vBulletinRequestSchema(json) || vBulletinResponseSchema(json) || vChatMessageSchema(json) || vDHPublicKeySchema(json) || vChatSyncSchema(json) || vDeclare(json)) {
+      if (vBulletinRequestSchema(json) || vObjectResponseSchema(json) || vChatMessageSchema(json) || vChatDHSchema(json) || vChatSyncSchema(json) || vDeclare(json)) {
         return json;
       } else {
         return false;
