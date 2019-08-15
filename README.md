@@ -11,6 +11,8 @@
 后续可能还会进行扩展：局域网内数据同步功能，数据中继远程系统互联机制，群主主控模式的点对点群聊（这个已经有思路了），消息内容格式扩展等。
 
 后续还有其他项目计划，需要c++11相关人才，苟富贵，定不相忘！  
+**namespacegenesis@gmail.com**
+
 
 # code
 **[client](https://github.com/oxogenesis/oxo-chat-client)**  
