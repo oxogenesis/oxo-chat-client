@@ -510,7 +510,7 @@ const mutations = {
       //group
       state.DB.run(`CREATE TABLE IF NOT EXISTS GROUPS(
         group_hash VARCHAR(32) NOT NULL PRIMARY KEY,
-        admin_address VARCHAR(35) NOT NULL,
+        group_address VARCHAR(35) NOT NULL,
         group_name text NOT NULL,
         updated_at INTEGER
         )`, err => {
@@ -993,6 +993,28 @@ const mutations = {
                 })
               }
             }
+          } else if (json.Action == state.ActionCode.GroupRequest) {
+            let address = oxoKeyPairs.deriveAddress(json.PublicKey)
+
+            let SQL = `SELECT * FROM GROUPS WHERE group_hash = "${json.GroupHash}"`
+            state.DB.get(SQL, (err, item) => {
+              if (err) {
+                console.log(err)
+              } else {
+                if (item.group_address == json.To) {
+                  //save request
+                  let SQL = `INSERT INTO GROUP_REQUESTS (address, group_address, group_hash, group_name, subaction, json, created_at)
+                  VALUES ('${address}', '${item.group_address}', '${item.group_hash}', '${item.group_name}', '${json.SubAction}', '${event.data}', '${json.Timestamp}')`
+                  state.DB.run(SQL, err => {
+                    if (err) {
+                      console.log(err)
+                    } else {
+                      state.GroupRequests.push({ "address": address, "group_address": item.group_address, "group_hash": item.group_hash, "group_name": item.group_name, "subaction": json.SubAction, "timestamp": json.Timestamp})
+                    }
+                  })
+                }
+              }
+            })
           }
         } else {
           console.log("json schema invalid...")
@@ -1275,7 +1297,7 @@ const mutations = {
       if (err) {
         console.log(err)
       } else {
-        SQL = `INSERT INTO GROUPS (group_hash, admin_address, group_name, updated_at)
+        SQL = `INSERT INTO GROUPS (group_hash, group_address, group_name, updated_at)
         VALUES ('${group_hash}', '${state.Address}', '${group_name}', '${timestamp}')`
         state.DB.run(SQL, err => {
           if (err) {
@@ -1306,12 +1328,12 @@ const mutations = {
       "GroupHash": group_hash,
       "SubAction": state.GroupRequestActionCode.Join,
       "To": group_address,
-      "Timestamp": payload.timestamp,
+      "Timestamp": timestamp,
       "PublicKey": state.PublicKey
     }
     let sig = sign(JSON.stringify(json), state.PrivateKey)
     json.Signature = sig
-    //console.log(json)
+    console.log(json)
     let strJson = JSON.stringify(json)
 
     let SQL = `INSERT INTO GROUP_REQUESTS (address, group_address, group_hash, group_name, subaction, json, created_at)
@@ -1320,7 +1342,8 @@ const mutations = {
       if (err) {
         console.log(err)
       } else {
-        state.GroupRequests.push({ "address": state.Address, "group_address": group_address, "group_hash": group_hash, "group_name": group_name, "subaction": state.GroupRequestActionCode.Join })
+        state.GroupRequests.push({ "address": state.Address, "group_address": group_address, "group_hash": group_hash, "group_name": group_name, "subaction": state.GroupRequestActionCode.Join, "timestamp": timestamp })
+        state.WS.send(strJson)
       }
     })
   }

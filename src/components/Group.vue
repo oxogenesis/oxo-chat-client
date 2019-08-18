@@ -21,7 +21,7 @@
     群组请求：<br>
     <ul>
       <li v-for="request in this.$store.state.OXO.GroupRequests">
-        {{getNameByAddress(request.address)}}:{{getNameByAddress(request.group_address)}} :{{request.group_hash}}:{{request.group_name}}:{{request.subaction}}
+        {{getNameByAddress(request.address)}}:{{getNameByAddress(request.group_address)}} :{{request.group_hash}}:{{request.group_name}}:{{request.subaction}}:{{request.timestamp | time}}
       </li>
     </ul>
   </div>
@@ -65,6 +65,9 @@ export default {
       let group_name = document.querySelector('input#input_group_name2').value
       if (group_address == "" || group_hash == "" || group_name == "") {
         alert("群组Hash、创建者账号、群组名均不能为空...")
+        return
+      } else if (group_address == this.$store.state.OXO.Address) {
+        alert("你是这个群组的创始人...")
         return
       } else {
         this.$store.commit({

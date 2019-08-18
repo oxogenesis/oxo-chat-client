@@ -235,8 +235,8 @@ let GroupRequestSchema = {
     "GroupHash": {
       "type": "string"
     },
-//leave:0
-//join:1
+    //leave:0
+    //join:1
     "SubAction": {
       "type": "number"
     },
@@ -273,11 +273,11 @@ let GroupManageSchema = {
     "PreHash": {
       "type": "string"
     },
-//dismiss:0
-//create:1
-//member approve:2   need Request
-//remove member:3
-//member release:4   need Request
+    //dismiss:0
+    //create:1
+    //member approve:2   need Request
+    //remove member:3
+    //member release:4   need Request
     "SubAction": {
       "type": "string"
     },
@@ -425,35 +425,41 @@ let GroupMessageSyncSchema = {
 }
 //end client schema
 
-var Ajv = require('ajv');
-var ajv = new Ajv({ allErrors: true });
+var Ajv = require('ajv')
+var ajv = new Ajv({ allErrors: true })
 
 //client
-var vDeclare = ajv.compile(DeclareSchema);
-var vBulletinRequestSchema = ajv.compile(BulletinRequestSchema);
-var vObjectResponseSchema = ajv.compile(ObjectResponseSchema);
-var vChatMessageSchema = ajv.compile(ChatMessageSchema);
-var vChatSyncSchema = ajv.compile(ChatSyncSchema);
-var vChatDHSchema = ajv.compile(ChatDHSchema);
+var vDeclare = ajv.compile(DeclareSchema)
+var vBulletinRequestSchema = ajv.compile(BulletinRequestSchema)
+var vObjectResponseSchema = ajv.compile(ObjectResponseSchema)
+var vChatMessageSchema = ajv.compile(ChatMessageSchema)
+var vChatSyncSchema = ajv.compile(ChatSyncSchema)
+var vChatDHSchema = ajv.compile(ChatDHSchema)
+var vGroupRequestSchema = ajv.compile(GroupRequestSchema)
+var vGroupManageSchema = ajv.compile(GroupManageSchema)
+var vGroupManageSyncSchema = ajv.compile(GroupManageSyncSchema)
+var vGroupDHSchema = ajv.compile(GroupDHSchema)
+var vGroupMessageSchema = ajv.compile(GroupMessageSchema)
+var vGroupMessageSyncSchema = ajv.compile(GroupMessageSyncSchema)
 
 function checkJsonSchema(strJson) {
   if (typeof strJson == "string") {
     try {
-      let json = JSON.parse(strJson);
-      if (vBulletinRequestSchema(json) || vObjectResponseSchema(json) || vChatMessageSchema(json) || vChatDHSchema(json) || vChatSyncSchema(json) || vDeclare(json)) {
-        return json;
+      let json = JSON.parse(strJson)
+      if (vObjectResponseSchema(json) || vBulletinRequestSchema(json) || vChatMessageSchema(json) || vChatSyncSchema(json) || vChatDHSchema(json) || vDeclare(json) || vGroupRequestSchema(json) || vGroupManageSchema(json) || vGroupManageSyncSchema(json) || vGroupDHSchema(json) || vGroupMessageSchema(json) || vGroupMessageSyncSchema(json)) {
+        return json
       } else {
-        return false;
+        return false
       }
     } catch (e) {
-      return false;
+      return false
     }
   } else {
-    return false;
+    return false
   }
 }
 
-var vBulletinSchema = ajv.compile(BulletinSchema);
+var vBulletinSchema = ajv.compile(BulletinSchema)
 
 function checkBulletinSchema(json) {
   //console.log(json)
