@@ -35,13 +35,18 @@ const state = {
   //bulletin board => BB
   //all => *
   //me  => #
-  BBSession: [],
+  BBSessions: [],
   CurrentBBSession: '',
   CurrentBulletinSequence: 0,
   CurrentBulletinHash: GenesisHash,
   Bulletins: [],
   Quotes: [],
   DisplayQuotes: [],
+
+  Groups: {},
+  GroupSessions: [],
+  GroupRequests: [],
+  CurrentGroupSession: '',
 
   //constant
   ActionCode: {
@@ -54,12 +59,27 @@ const state = {
     "ChatSync": 206,
 
     "GroupManage": 210,
-    "GroupManageSync": 211,
-    "GroupDH": 212,
-    "GroupMessage": 213,
-    "GroupMessageSync": 214
+    "GroupRequest": 211,
+    "GroupManageSync": 212,
+    "GroupDH": 213,
+    "GroupMessage": 214,
+    "GroupMessageSync": 215
   },
   DefaultDivision: 3,
+
+  //group
+  GroupRequestActionCode: {
+    "Join": 1,
+    "Leave": 0
+  },
+  GroupManageActionCode: {
+    "Dismiss": 0,
+    "Create": 1,
+    "MemberApprove": 2, //need Request
+    "RemoveMember": 3,
+    "MemberRelease": 4 //need Request
+  },
+
 
   //util
   Init: true,
@@ -236,14 +256,21 @@ const mutations = {
     state.Messages = []
 
     //BB
-    state.BBSession = []
+    state.BBSessions = []
     state.CurrentBBSession = ''
     state.CurrentBulletinSequence = 0
     state.CurrentBulletinHash = GenesisHash
     state.Bulletins = []
     state.Quotes = []
     state.DisplayQuotes = []
+
+    //group
+    state.Groups = {}
+    state.GroupSessions = []
+    state.GroupRequests = []
+    state.CurrentGroupSession = ''
   },
+  //contact
   AddContact(state, payload) {
     let timestamp = Date.now()
     let address = payload.address
@@ -390,6 +417,7 @@ const mutations = {
       }
     })
   },
+  //db
   LoadDB(state, address) {
     state.DB = new sqlite3.Database(`./db/${address}.db`)
     state.DB.serialize(() => {
@@ -479,6 +507,86 @@ const mutations = {
         }
       })
 
+      //group
+      state.DB.run(`CREATE TABLE IF NOT EXISTS GROUPS(
+        group_hash VARCHAR(32) NOT NULL PRIMARY KEY,
+        admin_address VARCHAR(35) NOT NULL,
+        group_name text NOT NULL,
+        updated_at INTEGER
+        )`, err => {
+        if (err) {
+          console.log(err)
+        }
+      })
+
+      state.DB.run(`CREATE TABLE IF NOT EXISTS GROUP_REQUESTS(
+        address VARCHAR(32) NOT NULL,
+        group_address VARCHAR(32) NOT NULL,
+        group_hash VARCHAR(32) NOT NULL,
+        group_name text NOT NULL,
+        subaction INTEGER,
+        json TEXT,
+        created_at INTEGER
+        )`, err => {
+        if (err) {
+          console.log(err)
+        }
+      })
+
+      state.DB.run(`CREATE TABLE IF NOT EXISTS GROUP_MANAGES(
+        group_hash VARCHAR(32) NOT NULL PRIMARY KEY,
+        sequence INTEGER,
+        json TEXT,
+        updated_at INTEGER
+        )`, err => {
+        if (err) {
+          console.log(err)
+        }
+      })
+
+      state.DB.run(`CREATE TABLE IF NOT EXISTS GROUP_MEMBERS(
+        group_hash VARCHAR(32) NOT NULL PRIMARY KEY,
+        address VARCHAR(35) NOT NULL,
+        join_at INTEGER
+        )`, err => {
+        if (err) {
+          console.log(err)
+        }
+      })
+
+      state.DB.run(`CREATE TABLE IF NOT EXISTS GROUP_ECDHS(
+        group_hash VARCHAR(32) NOT NULL,
+        address VARCHAR(35) NOT NULL,
+        aes_key TEXT,
+        private_key TEXT,
+        public_key TEXT,
+        self_json TEXT,
+        pair_json TEXT,
+        PRIMARY KEY (group_hash, address)
+        )`, err => {
+        if (err) {
+          console.log(err)
+        }
+      })
+
+      state.DB.run(`CREATE TABLE IF NOT EXISTS GROUP_MESSAGES(
+        hash VARCHAR(32) PRIMARY KEY,
+        group_hash VARCHAR(32) NOT NULL,
+        sour_address VARCHAR(35),
+        sequence INTEGER,
+        pre_hash VARCHAR(32) NOT NULL,
+        confirm VARCHAR(32) NOT NULL,
+        content TEXT,
+        timestamp INTEGER,
+        created_at INTEGER,
+        json TEXT,
+        readed BOOLEAN DEFAULT FALSE
+        )`, err => {
+        if (err) {
+          console.log(err)
+        }
+      })
+
       //setting
       state.DB.run(`CREATE TABLE IF NOT EXISTS HOSTS(
         host TEXT PRIMARY KEY,
@@ -523,7 +631,32 @@ const mutations = {
         }
       }
     })
+
+    //group
+    SQL = 'SELECT * FROM GROUPS'
+    state.DB.all(SQL, (err, items) => {
+      if (err) {
+        console.log(err)
+      } else {
+        for (const item of items) {
+          state.GroupSessions.push(item.group_hash)
+          state.Groups[item.group_hash] = item.group_name
+        }
+      }
+    })
+
+    SQL = 'SELECT * FROM GROUP_REQUESTS'
+    state.DB.all(SQL, (err, items) => {
+      if (err) {
+        console.log(err)
+      } else {
+        for (const item of items) {
+          state.GroupRequests.push({ "address": item.address, "group_address": item.group_address, "group_hash": item.group_hash, "group_name": item.group_name, "subaction": item.subaction })
+        }
+      }
+    })
   },
+  //host
   LoadHost(state) {
     let SQL = 'SELECT * FROM HOSTS ORDER BY updated_at DESC'
     state.DB.all(SQL, (err, items) => {
@@ -550,7 +683,6 @@ const mutations = {
         }
       }
     })
-
   },
   DoConn(state) {
     //ws state:
@@ -1118,6 +1250,79 @@ const mutations = {
   },
   HideQuote(state) {
     state.DisplayQuotes = []
+  },
+  //group
+  CreateGroup(state, payload) {
+    let timestamp = Date.now()
+    let group_name = payload.group_name
+    let group_hash = halfSHA512(state.Address + timestamp.toString() + crypto.randomBytes(16).toString('hex'))
+    let json = {
+      "Action": state.ActionCode.GroupManage,
+      "GroupHash": group_hash,
+      "Sequence": 1,
+      "PreHash": GenesisHash,
+      "SubAction": state.GroupManageActionCode.Create,
+      "Timestamp": payload.timestamp,
+      "PublicKey": state.PublicKey
+    }
+    let sig = sign(JSON.stringify(json), state.PrivateKey)
+    json.Signature = sig
+    //console.log(json)
+    let strJson = JSON.stringify(json)
+    let SQL = `INSERT INTO GROUP_MANAGES (group_hash, sequence, json, updated_at)
+        VALUES ('${group_hash}', '${1}', '${strJson}', '${timestamp}')`
+    state.DB.run(SQL, err => {
+      if (err) {
+        console.log(err)
+      } else {
+        SQL = `INSERT INTO GROUPS (group_hash, admin_address, group_name, updated_at)
+        VALUES ('${group_hash}', '${state.Address}', '${group_name}', '${timestamp}')`
+        state.DB.run(SQL, err => {
+          if (err) {
+            console.log(err)
+          } else {
+            SQL = `INSERT INTO GROUP_MEMBERS (group_hash, address, join_at)
+            VALUES ('${group_hash}', '${state.Address}', '${timestamp}')`
+            state.DB.run(SQL, err => {
+              if (err) {
+                console.log(err)
+              } else {
+                state.GroupSessions.push(group_hash)
+                state.Groups[group_hash] = group_name
+              }
+            })
+          }
+        })
+      }
+    })
+  },
+  JoinGroup(state, payload) {
+    let timestamp = Date.now()
+    let group_address = payload.group_address
+    let group_hash = payload.group_hash
+    let group_name = payload.group_name
+    let json = {
+      "Action": state.ActionCode.GroupManage,
+      "GroupHash": group_hash,
+      "SubAction": state.GroupRequestActionCode.Join,
+      "To": group_address,
+      "Timestamp": payload.timestamp,
+      "PublicKey": state.PublicKey
+    }
+    let sig = sign(JSON.stringify(json), state.PrivateKey)
+    json.Signature = sig
+    //console.log(json)
+    let strJson = JSON.stringify(json)
+
+    let SQL = `INSERT INTO GROUP_REQUESTS (address, group_address, group_hash, group_name, subaction, json, created_at)
+    VALUES ('${state.Address}', '${group_address}', '${group_hash}', '${group_name}', '${state.GroupRequestActionCode.Join}', '${strJson}', '${timestamp}')`
+    state.DB.run(SQL, err => {
+      if (err) {
+        console.log(err)
+      } else {
+        state.GroupRequests.push({ "address": state.Address, "group_address": group_address, "group_hash": group_hash, "group_name": group_name, "subaction": state.GroupRequestActionCode.Join })
+      }
+    })
   }
 }
 
@@ -1344,7 +1549,13 @@ const getters = {
     return state.Hosts
   },
   getNameByAddress: (state) => (address) => {
-    return state.Contacts[address]
+    if (address == state.Address) {
+      return "ME"
+    } else if (state.Contacts[address] == null) {
+      return address
+    } else {
+      return state.Contacts[address]
+    }
   },
   //chat
   currentChatSession: (state) => {
@@ -1425,6 +1636,9 @@ const getters = {
   },
   displayQuotes: (state) => {
     return state.DisplayQuotes
+  },
+  getNameByHash: (state) => (hash) => {
+    return state.Groups[hash]
   }
 }
 

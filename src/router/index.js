@@ -40,9 +40,19 @@ export default new Router({
       component: require('@/components/Setting').default
     },
     {
+      path: '/Network',
+      name: 'Network',
+      component: require('@/components/Network').default
+    },
+    {
       path: '/Contact',
       name: 'Contact',
       component: require('@/components/Contact').default
+    },
+    {
+      path: '/Group',
+      name: 'Group',
+      component: require('@/components/Group').default
     },
     {
       path: '/BBs',
@@ -63,6 +73,16 @@ export default new Router({
       path: '/Chats/:address',
       name: 'Chats',
       component: require('@/components/Chats').default
+    },
+    {
+      path: '/Groups',
+      name: 'Groups',
+      component: require('@/components/Groups').default
+    },
+    {
+      path: '/Groups/:hash',
+      name: 'Groups',
+      component: require('@/components/Groups').default
     },
     {
       path: '*',
