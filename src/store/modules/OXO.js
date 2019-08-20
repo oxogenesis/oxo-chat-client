@@ -276,7 +276,7 @@ const mutations = {
     let address = payload.address
     let name = payload.name
     let SQL = `INSERT INTO CONTACTS (address, name, created_at, updated_at)
-        VALUES ('${address}', '${name}', '${timestamp}', '${timestamp}')`
+        VALUES ('${address}', '${name}', ${timestamp}, ${timestamp})`
     state.DB.run(SQL, err => {
       if (err) {
         console.log(err)
@@ -293,7 +293,7 @@ const mutations = {
     let timestamp = Date.now()
     let address = payload.address
     let name = payload.name
-    let SQL = `UPDATE CONTACTS SET name = '${name}', updated_at = '${timestamp}' WHERE address = "${address}"`
+    let SQL = `UPDATE CONTACTS SET name = '${name}', updated_at = ${timestamp} WHERE address = "${address}"`
     state.DB.run(SQL, err => {
       if (err) {
         console.log(err)
@@ -356,7 +356,7 @@ const mutations = {
   AddFriend(state, address) {
     let timestamp = Date.now()
     let SQL = `INSERT INTO FRIENDS (address, created_at, updated_at)
-        VALUES ('${address}', '${timestamp}', '${timestamp}')`
+        VALUES ('${address}', ${timestamp}, ${timestamp})`
 
     state.DB.run(SQL, err => {
       if (err) {
@@ -388,7 +388,7 @@ const mutations = {
   AddFollow(state, address) {
     let timestamp = Date.now()
     let SQL = `INSERT INTO FOLLOWS (address, created_at, updated_at)
-        VALUES ('${address}', '${timestamp}', '${timestamp}')`
+        VALUES ('${address}', ${timestamp}, ${timestamp})`
 
     state.DB.run(SQL, err => {
       if (err) {
@@ -512,6 +512,7 @@ const mutations = {
         group_hash VARCHAR(32) NOT NULL PRIMARY KEY,
         group_address VARCHAR(35) NOT NULL,
         group_name text NOT NULL,
+        sequence INTEGER,
         updated_at INTEGER
         )`, err => {
         if (err) {
@@ -526,7 +527,8 @@ const mutations = {
         group_name text NOT NULL,
         subaction INTEGER,
         json TEXT,
-        created_at INTEGER
+        created_at INTEGER,
+        PRIMARY KEY (group_hash, address)
         )`, err => {
         if (err) {
           console.log(err)
@@ -534,10 +536,12 @@ const mutations = {
       })
 
       state.DB.run(`CREATE TABLE IF NOT EXISTS GROUP_MANAGES(
-        group_hash VARCHAR(32) NOT NULL PRIMARY KEY,
+        group_hash VARCHAR(32) NOT NULL,
         sequence INTEGER,
         json TEXT,
-        updated_at INTEGER
+        hash VARCHAR(32) NOT NULL,
+        created_at INTEGER,
+        PRIMARY KEY (group_hash, sequence)
         )`, err => {
         if (err) {
           console.log(err)
@@ -545,9 +549,10 @@ const mutations = {
       })
 
       state.DB.run(`CREATE TABLE IF NOT EXISTS GROUP_MEMBERS(
-        group_hash VARCHAR(32) NOT NULL PRIMARY KEY,
+        group_hash VARCHAR(32) NOT NULL,
         address VARCHAR(35) NOT NULL,
-        join_at INTEGER
+        joined_at INTEGER,
+        PRIMARY KEY (group_hash, address)
         )`, err => {
         if (err) {
           console.log(err)
@@ -651,7 +656,7 @@ const mutations = {
         console.log(err)
       } else {
         for (const item of items) {
-          state.GroupRequests.push({ "address": item.address, "group_address": item.group_address, "group_hash": item.group_hash, "group_name": item.group_name, "subaction": item.subaction })
+          state.GroupRequests.push({ "address": item.address, "group_address": item.group_address, "group_hash": item.group_hash, "group_name": item.group_name, "subaction": item.subaction, "timestamp": item.created_at, "json": item.json })
         }
       }
     })
@@ -959,7 +964,7 @@ const mutations = {
                 let timestamp = Date.now()
                 //save bulletin
                 let SQL = `INSERT INTO BULLETINS (address, sequence, pre_hash, content, timestamp, json, created_at, hash, quote_size)
-                  VALUES ('${address}', ${json.Sequence}, '${json.PreHash}', '${json.Content}', '${json.Timestamp}', '${strJson}', '${timestamp}', '${hash}', ${json.Quote.length})`
+                  VALUES ('${address}', ${json.Sequence}, '${json.PreHash}', '${json.Content}', '${json.Timestamp}', '${strJson}', ${timestamp}, '${hash}', ${json.Quote.length})`
                 state.DB.run(SQL, err => {
                   if (err) {
                     console.log(err)
@@ -976,7 +981,7 @@ const mutations = {
                 let timestamp = Date.now()
                 //save bulletin
                 let SQL = `INSERT INTO BULLETINS (address, sequence, pre_hash, content, timestamp, json, created_at, hash, quote_size)
-                  VALUES ('${address}', ${json.Sequence}, '${json.PreHash}', '${json.Content}', '${json.Timestamp}', '${strJson}', '${timestamp}', '${hash}', ${json.Quote.length})`
+                  VALUES ('${address}', ${json.Sequence}, '${json.PreHash}', '${json.Content}', '${json.Timestamp}', '${strJson}', ${timestamp}, '${hash}', ${json.Quote.length})`
                 state.DB.run(SQL, err => {
                   if (err) {
                     console.log(err)
@@ -996,22 +1001,49 @@ const mutations = {
           } else if (json.Action == state.ActionCode.GroupRequest) {
             let address = oxoKeyPairs.deriveAddress(json.PublicKey)
 
-            let SQL = `SELECT * FROM GROUPS WHERE group_hash = "${json.GroupHash}"`
-            state.DB.get(SQL, (err, item) => {
+            let SQL = `SELECT * FROM GROUPS WHERE group_hash = "${json.GroupHash}" AND group_address = '${json.To}'`
+            state.DB.get(SQL, (err, g) => {
               if (err) {
                 console.log(err)
               } else {
-                if (item.group_address == json.To) {
+                if (json.SubAction == state.GroupRequestActionCode.Join) {
                   //save request
-                  let SQL = `INSERT INTO GROUP_REQUESTS (address, group_address, group_hash, group_name, subaction, json, created_at)
-                  VALUES ('${address}', '${item.group_address}', '${item.group_hash}', '${item.group_name}', '${json.SubAction}', '${event.data}', '${json.Timestamp}')`
-                  state.DB.run(SQL, err => {
+                  let SQL = `SELECT * FROM GROUP_REQUESTS WHERE address = '${address}' AND group_hash = '${g.group_hash}' AND subaction = ${json.SubAction}`
+                  state.DB.get(SQL, (err, gr) => {
                     if (err) {
                       console.log(err)
                     } else {
-                      state.GroupRequests.push({ "address": address, "group_address": item.group_address, "group_hash": item.group_hash, "group_name": item.group_name, "subaction": json.SubAction, "timestamp": json.Timestamp})
+                      if (gr == null) {
+                        SQL = `INSERT INTO GROUP_REQUESTS (address, group_address, group_hash, group_name, subaction, json, created_at)
+                        VALUES ('${address}', '${g.group_address}', '${g.group_hash}', '${g.group_name}', '${json.SubAction}', '${event.data}', '${json.Timestamp}')`
+                        state.DB.run(SQL, err => {
+                          if (err) {
+                            console.log(err)
+                          } else {
+                            state.GroupRequests.push({ "address": address, "group_address": g.group_address, "group_hash": g.group_hash, "group_name": g.group_name, "subaction": json.SubAction, "timestamp": json.Timestamp, "json": event.data })
+                          }
+                        })
+                      } else {
+                        SQL = `UPDATE GROUP_REQUESTS SET group_name = '${g.group_name}', json = '${event.data}', created_at = ${json.Timestamp} WHERE address = '${address}' AND group_hash = '${g.group_hash}' AND subaction = ${json.SubAction}`
+                        console.log(SQL)
+                        state.DB.run(SQL, err => {
+                          if (err) {
+                            console.log(err)
+                          } else {
+                            for (let i = state.GroupRequests.length - 1; i >= 0; i--) {
+                              if (state.GroupRequests[i].address == address && state.GroupRequests[i].group_hash == g.group_hash && state.GroupRequests[i].subaction == json.SubAction) {
+                                state.GroupRequests[i].timestamp = json.Timestamp
+                                state.GroupRequests[i].json = event.data
+                                break
+                              }
+                            }
+                          }
+                        })
+                      }
                     }
                   })
+                } else if (json.SubAction == state.GroupRequestActionCode.Leave) {
+                  //TODO
                 }
               }
             })
@@ -1291,20 +1323,21 @@ const mutations = {
     json.Signature = sig
     //console.log(json)
     let strJson = JSON.stringify(json)
-    let SQL = `INSERT INTO GROUP_MANAGES (group_hash, sequence, json, updated_at)
-        VALUES ('${group_hash}', '${1}', '${strJson}', '${timestamp}')`
+    let hash = halfSHA512(strJson)
+    let SQL = `INSERT INTO GROUP_MANAGES (group_hash, sequence, json, hash, created_at)
+        VALUES ('${group_hash}', 1, '${strJson}', '${hash}', ${timestamp})`
     state.DB.run(SQL, err => {
       if (err) {
         console.log(err)
       } else {
         SQL = `INSERT INTO GROUPS (group_hash, group_address, group_name, updated_at)
-        VALUES ('${group_hash}', '${state.Address}', '${group_name}', '${timestamp}')`
+        VALUES ('${group_hash}', '${state.Address}', '${group_name}', ${timestamp})`
         state.DB.run(SQL, err => {
           if (err) {
             console.log(err)
           } else {
-            SQL = `INSERT INTO GROUP_MEMBERS (group_hash, address, join_at)
-            VALUES ('${group_hash}', '${state.Address}', '${timestamp}')`
+            SQL = `INSERT INTO GROUP_MEMBERS (group_hash, address, joined_at)
+            VALUES ('${group_hash}', '${state.Address}', ${timestamp})`
             state.DB.run(SQL, err => {
               if (err) {
                 console.log(err)
@@ -1318,32 +1351,134 @@ const mutations = {
       }
     })
   },
-  JoinGroup(state, payload) {
+  GroupSubactionRequest(state, payload) {
     let timestamp = Date.now()
     let group_address = payload.group_address
     let group_hash = payload.group_hash
     let group_name = payload.group_name
+    let subaction = payload.subaction
     let json = {
-      "Action": state.ActionCode.GroupManage,
+      "Action": state.ActionCode.GroupRequest,
       "GroupHash": group_hash,
-      "SubAction": state.GroupRequestActionCode.Join,
+      "SubAction": subaction,
       "To": group_address,
       "Timestamp": timestamp,
       "PublicKey": state.PublicKey
     }
     let sig = sign(JSON.stringify(json), state.PrivateKey)
     json.Signature = sig
-    console.log(json)
+    //console.log(json)
     let strJson = JSON.stringify(json)
 
-    let SQL = `INSERT INTO GROUP_REQUESTS (address, group_address, group_hash, group_name, subaction, json, created_at)
-    VALUES ('${state.Address}', '${group_address}', '${group_hash}', '${group_name}', '${state.GroupRequestActionCode.Join}', '${strJson}', '${timestamp}')`
-    state.DB.run(SQL, err => {
+    let SQL = `SELECT * FROM GROUP_REQUESTS WHERE address = '${state.Address}' AND group_hash = '${group_hash}' AND subaction = ${subaction}`
+    state.DB.get(SQL, (err, item) => {
       if (err) {
         console.log(err)
       } else {
-        state.GroupRequests.push({ "address": state.Address, "group_address": group_address, "group_hash": group_hash, "group_name": group_name, "subaction": state.GroupRequestActionCode.Join, "timestamp": timestamp })
-        state.WS.send(strJson)
+        if (item == null) {
+          SQL = `INSERT INTO GROUP_REQUESTS (address, group_address, group_hash, group_name, subaction, json, created_at)
+          VALUES ('${state.Address}', '${group_address}', '${group_hash}', '${group_name}', ${subaction}, '${strJson}', ${timestamp})`
+          state.DB.run(SQL, err => {
+            if (err) {
+              console.log(err)
+            } else {
+              state.GroupRequests.push({ 'address': state.Address, 'group_address': group_address, 'group_hash': group_hash, 'group_name': group_name, 'subaction': subaction, "timestamp": timestamp })
+              state.WS.send(strJson)
+            }
+          })
+        } else {
+          SQL = `UPDATE GROUP_REQUESTS SET group_name = '${group_name}', json = '${strJson}', created_at = ${timestamp} WHERE address = '${state.Address}' AND group_hash = '${group_hash}' AND subaction = ${subaction}`
+          console.log(SQL)
+          state.DB.run(SQL, err => {
+            if (err) {
+              console.log(err)
+            } else {
+              for (let i = state.GroupRequests.length - 1; i >= 0; i--) {
+                if (state.GroupRequests[i].address == state.Address && state.GroupRequests[i].group_hash == group_hash && state.GroupRequests[i].subaction == subaction) {
+                  state.GroupRequests[i].group_name = group_name
+                  state.GroupRequests[i].timestamp = timestamp
+                  state.GroupRequests[i].json = json
+                  break
+                }
+              }
+              state.WS.send(strJson)
+            }
+          })
+        }
+      }
+    })
+  },
+  PermitJoin(state, payload) {
+    let address = payload.address
+    let group_hash = payload.group_hash
+    let timestamp = Date.now()
+    let SQL = `SELECT * FROM GROUPS WHERE group_hash = "${group_hash}" AND group_address = '${state.Address}'`
+    state.DB.get(SQL, (err, g) => {
+      if (err) {
+        console.log(err)
+      } else {
+        if (g != null) {
+          //i am group admin
+          SQL = `SELECT * FROM GROUP_MEMBERS WHERE group_hash = "${group_hash}" AND address = '${address}'`
+          state.DB.get(SQL, (err, gme) => {
+            if (err) {
+              console.log(err)
+            } else {
+              if (gme != null) {
+                //already member
+                //send last confirm manage
+                //TODO
+              } else {
+                //not member,
+                //get group sequence
+                SQL = `SELECT * FROM GROUP_MANAGES WHERE group_hash = '${group_hash}' ORDER BY sequence DESC`
+                state.DB.get(SQL, (err, gma) => {
+                  if (err) {
+                    console.log(err)
+                  } else {
+                    if (gma != null) {
+                      //gen manage json
+                      let json = {
+                        "Action": state.ActionCode.GroupManage,
+                        "GroupHash": group_hash,
+                        "Sequence": gma.sequence + 1,
+                        "PreHash": gma.hash,
+                        "SubAction": state.GroupManageActionCode.MemberApprove,
+                        "Request": JSON.parse(payload.json),
+                        "Timestamp": timestamp,
+                        "PublicKey": state.PublicKey
+                      }
+                      let sig = sign(JSON.stringify(json), state.PrivateKey)
+                      json.Signature = sig
+                      //console.log(json)
+                      let strJson = JSON.stringify(json)
+                      let hash = halfSHA512(strJson)
+
+                      SQL = `INSERT INTO GROUP_MANAGES (group_hash, sequence, json, hash, created_at)
+                      VALUES ('${group_hash}', ${gma.sequence + 1}, '${strJson}', '${hash}', ${timestamp})`
+                      state.DB.run(SQL, err => {
+                        if (err) {
+                          console.log(err)
+                        } else {
+                          state.WS.send(strJson)
+console.log(strJson)
+                          SQL = `INSERT INTO GROUP_MEMBERS (group_hash, address, joined_at)
+                              VALUES ('${group_hash}', '${address}', ${timestamp})`
+                          state.DB.run(SQL, err => {
+                            if (err) {
+                              console.log(err)
+                            } else {
+                            }
+                          })
+                        }
+                      })
+                    }
+                  }
+                })
+              }
+            }
+          })
+        }
       }
     })
   }
@@ -1363,7 +1498,7 @@ const actions = {
         console.log(err)
       } else {
         if (item != null) {
-          SQL = `UPDATE HOSTS SET updated_at = '${timestamp}' WHERE host = "${payload.host}"`
+          SQL = `UPDATE HOSTS SET updated_at = ${timestamp} WHERE host = '${payload.host}'`
           state.DB.run(SQL, err => {
             if (err) {
               console.log(err)
@@ -1373,7 +1508,7 @@ const actions = {
           })
         } else {
           SQL = `INSERT INTO HOSTS (host, updated_at)
-            VALUES ('${payload.host}', ${timestamp})`
+          VALUES ('${payload.host}', ${timestamp})`
 
           state.DB.run(SQL, err => {
             if (err) {
@@ -1548,7 +1683,7 @@ const actions = {
 
     //save bulletin
     let SQL = `INSERT INTO BULLETINS (address, sequence, pre_hash, content, timestamp, json, created_at, hash, quote_size)
-      VALUES ('${state.Address}', ${state.CurrentBulletinSequence + 1}, '${state.CurrentBulletinHash}', '${payload.content}', '${timestamp}', '${strJson}', '${timestamp}', '${hash}', ${tmpQuotes.length})`
+      VALUES ('${state.Address}', ${state.CurrentBulletinSequence + 1}, '${state.CurrentBulletinHash}', '${payload.content}', ${timestamp}, '${strJson}', ${timestamp}, '${hash}', ${tmpQuotes.length})`
     console.log(SQL)
 
     state.DB.run(SQL, err => {
@@ -1570,6 +1705,9 @@ const getters = {
   },
   getHosts: (state) => {
     return state.Hosts
+  },
+  getAddress: (state) => {
+    return state.Address
   },
   getNameByAddress: (state) => (address) => {
     if (address == state.Address) {
