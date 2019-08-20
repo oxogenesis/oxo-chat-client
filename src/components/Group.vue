@@ -9,7 +9,7 @@
     创建者账号: <input type="text" name="group_address" id="input_group_address" /><br>
     群组Hash: <input type="text" name="group_hash" id="input_group_hash" /><br>
     群组名: <input type="text" name="group_name" id="input_group_name2" /><br>
-    <input type="button" value="申请加入" @click="joinGroup()" /><br>
+    <input type="button" value="申请加入" @click="joinRequest()" /><br>
     <br>
     群组：<br>
     <ul>
@@ -21,7 +21,13 @@
     群组请求：<br>
     <ul>
       <li v-for="request in this.$store.state.OXO.GroupRequests">
-        {{getNameByAddress(request.address)}}:{{getNameByAddress(request.group_address)}} :{{request.group_hash}}:{{request.group_name}}:{{request.subaction}}:{{request.timestamp | time}}
+        <span v-if="request.address != getAddress">{{getNameByAddress(request.address)}}</span><br>
+        <span v-if="request.subaction == 1">申请加入</span><br>
+        {{request.group_name}}<span v-if="request.group_address != getAddress">({{getNameByAddress(request.group_address)}})</span><br>
+        @{{request.timestamp | time}}<br>
+        <input v-if="request.address == getAddress" type="button" value="重发" @click="reRequest(request.subaction, request.group_address, request.group_hash, request.group_name)" />
+        <input v-if="request.group_address == getAddress" type="button" value="同意" @click="permitJoin(request.address, request.group_hash, request.json)" />
+        <br>
       </li>
     </ul>
   </div>
@@ -29,6 +35,12 @@
 <script>
 import HeaderSection from './section/HeaderSection.vue'
 import { mapActions, mapMutations, mapGetters } from 'vuex'
+
+//group
+let GroupRequestActionCode = {
+  "Join": 1,
+  "Leave": 0
+}
 
 export default {
   data() {
@@ -42,6 +54,7 @@ export default {
   },
   computed: {
     ...mapGetters({
+      getAddress: 'getAddress',
       getNameByAddress: 'getNameByAddress',
       getNameByHash: 'getNameByHash'
     })
@@ -59,7 +72,7 @@ export default {
         })
       }
     },
-    joinGroup() {
+    joinRequest() {
       let group_address = document.querySelector('input#input_group_address').value
       let group_hash = document.querySelector('input#input_group_hash').value
       let group_name = document.querySelector('input#input_group_name2').value
@@ -71,12 +84,30 @@ export default {
         return
       } else {
         this.$store.commit({
-          type: 'JoinGroup',
+          type: 'GroupSubactionRequest',
           group_address: group_address,
           group_hash: group_hash,
-          group_name: group_name
+          group_name: group_name,
+          subaction: GroupRequestActionCode.Join
         })
       }
+    },
+    reRequest(subaction, group_address, group_hash, group_name) {
+      this.$store.commit({
+        type: 'GroupSubactionRequest',
+        group_address: group_address,
+        group_hash: group_hash,
+        group_name: group_name,
+        subaction: subaction
+      })
+    },
+    permitJoin(address, group_hash, json) {
+      this.$store.commit({
+        type: 'PermitJoin',
+        address: address,
+        group_hash: group_hash,
+        json: json
+      })
     },
     renameGroup() {
       let address = document.querySelector('input#input_address').value
