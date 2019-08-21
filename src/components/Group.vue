@@ -14,7 +14,13 @@
     群组：<br>
     <ul>
       <li v-for="group in this.$store.state.OXO.GroupSessions">
-        <router-link :to="{name:'Groups', params:{hash:group}}">{{getNameByHash(group)}}</router-link>:{{group}}
+        <router-link :to="{name:'Groups', params:{hash:group.hash}}">{{group.name}}</router-link>(
+        <span v-if="group.membership == 0">申请中</span>
+        <span v-if="group.membership == 1">创始人</span>
+        <span v-if="group.membership == 2">已加入</span>
+        <span v-if="group.membership == 3">退出中</span>
+        <span v-if="group.membership == 4">已退出</span>
+        ):{{group.hash}}
       </li>
     </ul>
     <br>
@@ -55,8 +61,7 @@ export default {
   computed: {
     ...mapGetters({
       getAddress: 'getAddress',
-      getNameByAddress: 'getNameByAddress',
-      getNameByHash: 'getNameByHash'
+      getNameByAddress: 'getNameByAddress'
     })
   },
   methods: {
