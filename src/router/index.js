@@ -85,6 +85,11 @@ export default new Router({
       component: require('@/components/Groups').default
     },
     {
+      path: '/GroupMember/:group_hash',
+      name: 'GroupMember',
+      component: require('@/components/GroupMember').default
+    },
+    {
       path: '*',
       redirect: '/'
     }
