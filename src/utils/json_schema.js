@@ -276,7 +276,7 @@ let GroupManageSchema = {
     //dismiss:0
     //create:1
     //member approve:2   need Request
-    //remove member:3
+    //remove member:3    Request = {"Address":address}
     //member release:4   need Request
     "SubAction": {
       "type": "string"
@@ -435,18 +435,16 @@ var vObjectResponseSchema = ajv.compile(ObjectResponseSchema)
 var vChatMessageSchema = ajv.compile(ChatMessageSchema)
 var vChatSyncSchema = ajv.compile(ChatSyncSchema)
 var vChatDHSchema = ajv.compile(ChatDHSchema)
-var vGroupRequestSchema = ajv.compile(GroupRequestSchema)
-var vGroupManageSchema = ajv.compile(GroupManageSchema)
 var vGroupManageSyncSchema = ajv.compile(GroupManageSyncSchema)
 var vGroupDHSchema = ajv.compile(GroupDHSchema)
-var vGroupMessageSchema = ajv.compile(GroupMessageSchema)
 var vGroupMessageSyncSchema = ajv.compile(GroupMessageSyncSchema)
+var vGroupRequestSchema = ajv.compile(GroupRequestSchema)
 
 function checkJsonSchema(strJson) {
   if (typeof strJson == "string") {
     try {
       let json = JSON.parse(strJson)
-      if (vObjectResponseSchema(json) || vBulletinRequestSchema(json) || vChatMessageSchema(json) || vChatSyncSchema(json) || vChatDHSchema(json) || vDeclare(json) || vGroupRequestSchema(json) || vGroupManageSchema(json) || vGroupManageSyncSchema(json) || vGroupDHSchema(json) || vGroupMessageSchema(json) || vGroupMessageSyncSchema(json)) {
+      if (vObjectResponseSchema(json) || vBulletinRequestSchema(json) || vChatMessageSchema(json) || vChatSyncSchema(json) || vChatDHSchema(json) || vDeclare(json) || vGroupManageSchema(json) || vGroupManageSyncSchema(json) || vGroupDHSchema(json) || vGroupMessageSchema(json) || vGroupMessageSyncSchema(json) || vGroupRequestSchema(json)) {
         return json
       } else {
         return false
@@ -460,7 +458,6 @@ function checkJsonSchema(strJson) {
 }
 
 var vBulletinSchema = ajv.compile(BulletinSchema)
-
 function checkBulletinSchema(json) {
   //console.log(json)
   try {
@@ -476,8 +473,57 @@ function checkBulletinSchema(json) {
   }
 }
 
+var vGroupManageSchema = ajv.compile(GroupManageSchema)
+function checkGroupManageSchema(json) {
+  //console.log(json)
+  try {
+    if (vGroupManageSchema(json)) {
+      console.log(`GroupManage schema ok`)
+      return true
+    } else {
+      console.log(`GroupManage schema invalid`)
+      return false
+    }
+  } catch (e) {
+    return false
+  }
+}
+
+var vGroupMessageSchema = ajv.compile(GroupMessageSchema)
+function checkGroupMessageSchema(json) {
+  //console.log(json)
+  try {
+    if (vGroupMessageSchema(json)) {
+      console.log(`GroupMessage schema ok`)
+      return true
+    } else {
+      console.log(`GroupMessage schema invalid`)
+      return false
+    }
+  } catch (e) {
+    return false
+  }
+}
+
+function checkGroupRequestSchema(json) {
+  //console.log(json)
+  try {
+    if (vGroupRequestSchema(json)) {
+      console.log(`GroupRequest schema ok`)
+      return true
+    } else {
+      console.log(`GroupRequest schema invalid`)
+      return false
+    }
+  } catch (e) {
+    return false
+  }
+}
 
 module.exports = {
   checkJsonSchema,
-  checkBulletinSchema
+  checkBulletinSchema,
+  checkGroupManageSchema,
+  checkGroupRequestSchema,
+  checkGroupMessageSchema
 }
