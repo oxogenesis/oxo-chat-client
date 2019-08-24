@@ -14,25 +14,28 @@
     群组：<br>
     <ul>
       <li v-for="group in this.$store.state.OXO.GroupSessions">
-        <router-link :to="{name:'Groups', params:{hash:group.hash}}">{{group.name}}</router-link>(
+        <router-link :to="{name:'GroupMember', params:{group_hash:group.hash}}">{{group.name}}</router-link>(
         <span v-if="group.membership == 0">申请中</span>
         <span v-if="group.membership == 1">创始人</span>
         <span v-if="group.membership == 2">已加入</span>
         <span v-if="group.membership == 3">退出中</span>
         <span v-if="group.membership == 4">已退出</span>
-        ):{{group.hash}}
+        ):
+        @{{group.timestamp | time}}
+        <input v-if="group.membership == 0" type="button" value="申请加入" @click="reRequest(1, group.address, group.hash, group.name)" />
+        <input v-if="group.membership == 0" type="button" value="申请退出" @click="reRequest(0, group.address, group.hash, group.name)" />
+        <br>
+        群号:{{group.hash}}
       </li>
     </ul>
     <br>
-    群组请求：<br>
+    加入申请：<br>
     <ul>
       <li v-for="request in this.$store.state.OXO.GroupRequests">
-        <span v-if="request.address != getAddress">{{getNameByAddress(request.address)}}</span><br>
-        <span v-if="request.subaction == 1">申请加入</span><br>
-        {{request.group_name}}<span v-if="request.group_address != getAddress">({{getNameByAddress(request.group_address)}})</span><br>
-        @{{request.timestamp | time}}<br>
-        <input v-if="request.address == getAddress" type="button" value="重发" @click="reRequest(request.subaction, request.group_address, request.group_hash, request.group_name)" />
-        <input v-if="request.group_address == getAddress" type="button" value="同意" @click="permitJoin(request.address, request.group_hash, request.json)" />
+        {{getNameByAddress(request.address)}}
+        =>{{request.group_name}}
+        @{{request.timestamp | time}}
+        <input type="button" value="同意" @click="permitJoin(request.address, request.group_hash, request.json)" />
         <br>
       </li>
     </ul>
@@ -89,7 +92,7 @@ export default {
         return
       } else {
         this.$store.commit({
-          type: 'GroupSubactionRequest',
+          type: 'GroupRequest',
           group_address: group_address,
           group_hash: group_hash,
           group_name: group_name,
@@ -99,7 +102,7 @@ export default {
     },
     reRequest(subaction, group_address, group_hash, group_name) {
       this.$store.commit({
-        type: 'GroupSubactionRequest',
+        type: 'GroupRequest',
         group_address: group_address,
         group_hash: group_hash,
         group_name: group_name,

@@ -36,7 +36,6 @@ export default {
         type: 'SyncAllBulletin'
       })
     }
-
   },
   methods: {}
 }
