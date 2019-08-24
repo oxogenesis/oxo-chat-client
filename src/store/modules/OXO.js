@@ -1,5 +1,19 @@
-import { encrypt, decrypt, halfSHA512, sign, verifySignature, DHSequence, Epoch } from '../../utils/oxo.js'
-import { checkJsonSchema, checkBulletinSchema } from '../../utils/json_schema.js'
+import {
+  encrypt,
+  decrypt,
+  halfSHA512,
+  sign,
+  verifySignature,
+  DHSequence,
+  Epoch
+} from '../../utils/oxo.js'
+import {
+  checkJsonSchema,
+  checkBulletinSchema,
+  checkGroupManageSchema,
+  checkGroupRequestSchema,
+  checkGroupMessageSchema
+} from '../../utils/json_schema.js'
 
 const crypto = require("crypto")
 const oxoKeyPairs = require("oxo-keypairs")
@@ -47,6 +61,9 @@ const state = {
   GroupRequests: [],
   CurrentGroupSession: '',
 
+  CurrentGroup: {},
+  CurrenrGroupMembers: [],
+
   //constant
   ActionCode: {
     "Declare": 200,
@@ -75,15 +92,14 @@ const state = {
     "Dismiss": 0,
     "Create": 1,
     "MemberApprove": 2, //need Request
-    "RemoveMember": 3,
+    "MemberRemove": 3,
     "MemberRelease": 4 //need Request
   },
   GroupMemberShip: {
-    "Applier": 0,
+    "Applying": 0,
     "Founder": 1,
     "Member": 2,
-    "Exiting": 3,
-    "Exited": 4
+    "Exited": 3
   },
 
 
@@ -115,6 +131,18 @@ function Array2Str(array) {
   return tmpArray.join(',')
 }
 
+function VerifyJsonSignature(json) {
+  let sig = json["Signature"]
+  delete json["Signature"]
+  let tmpMsg = JSON.stringify(json)
+  if (verifySignature(tmpMsg, sig, json.PublicKey)) {
+    return true
+  } else {
+    console.log('signature invalid...')
+    return false
+  }
+}
+
 function GenBulletinRequest(address, sequence, to) {
   let json = {
     "Action": state.ActionCode.BulletinRequest,
@@ -144,6 +172,35 @@ function SyncFollowBulletin(follow) {
       state.WS.send(strJson)
     }
   })
+}
+
+function GenGroupManageRequest(group_hash, sequence, to) {
+  let json = {
+    "Action": state.ActionCode.GroupManageSync,
+    "GroupHash": group_hash,
+    "CurrentSequence": sequence,
+    "To": to,
+    "Timestamp": Date.now(),
+    "PublicKey": state.PublicKey
+  }
+  let sig = sign(JSON.stringify(json), state.PrivateKey)
+  json.Signature = sig
+  let strJson = JSON.stringify(json)
+  return strJson
+}
+
+function GenObjectResponse(object, to) {
+  let json = {
+    "Action": state.ActionCode.ObjectResponse,
+    "Object": object,
+    "To": to,
+    "Timestamp": Date.now(),
+    "PublicKey": state.PublicKey,
+  }
+  let sig = sign(JSON.stringify(json), state.PrivateKey)
+  json.Signature = sig
+  let strJson = JSON.stringify(json)
+  return strJson
 }
 
 function SaveChatMessage(sour_address, json) {
@@ -274,6 +331,8 @@ const mutations = {
     state.GroupSessions = []
     state.GroupRequests = []
     state.CurrentGroupSession = ''
+    state.CurrentGroup = {}
+    state.CurrenrGroupMembers = []
   },
   //contact
   AddContact(state, payload) {
@@ -649,7 +708,7 @@ const mutations = {
         console.log(err)
       } else {
         for (const item of items) {
-          state.GroupSessions.push({ "hash": item.group_hash, "name": item.group_name, "membership": item.membership })
+          state.GroupSessions.push({ "address": item.group_address, "hash": item.group_hash, "name": item.group_name, "membership": item.membership, "timestamp": item.updated_at })
         }
       }
     })
@@ -730,14 +789,10 @@ const mutations = {
           }
 
           //verify signature
-          let sig = json["Signature"]
-          delete json["Signature"]
-          let tmpMsg = JSON.stringify(json)
-          if (!verifySignature(tmpMsg, sig, json.PublicKey)) {
-            console.log('signature invalid...')
+          if (VerifyJsonSignature(json) == false) {
             return
           }
-          json["Signature"] = sig
+          //json["Signature"] = sig
 
           if (json.Action == state.ActionCode.ChatDH) {
             //check message from my friend
@@ -922,7 +977,7 @@ const mutations = {
           } else if (json.Action == state.ActionCode.BulletinRequest) {
             console.log(`BulletinRequest`)
             let address = oxoKeyPairs.deriveAddress(json.PublicKey)
-            let SQL = `SELECT * FROM BULLETINS WHERE address = "${json.Address}" AND sequence = ${json.Sequence} ORDER BY sequence DESC`
+            let SQL = `SELECT * FROM BULLETINS WHERE address = "${json.Address}" AND sequence = ${json.Sequence}`
             state.DB.get(SQL, (err, item) => {
               if (err) {
                 console.log(err)
@@ -933,16 +988,7 @@ const mutations = {
                   console.log(item)
                   bulletin = JSON.parse(item.json)
                 }
-                let json = {
-                  "Action": state.ActionCode.ObjectResponse,
-                  "Object": bulletin,
-                  "To": address,
-                  "Timestamp": Date.now(),
-                  "PublicKey": state.PublicKey,
-                }
-                let sig = sign(JSON.stringify(json), state.PrivateKey)
-                json.Signature = sig
-                let strJson = JSON.stringify(json)
+                let strJson = GenObjectResponse(bulletin, address)
                 state.WS.send(strJson)
               }
             })
@@ -957,11 +1003,7 @@ const mutations = {
               let strJson = JSON.stringify(json)
               let hash = halfSHA512(strJson)
 
-              sig = json["Signature"]
-              delete json["Signature"]
-              tmpMsg = JSON.stringify(json)
-              if (!verifySignature(tmpMsg, sig, json.PublicKey)) {
-                console.log('signature invalid...')
+              if (VerifyJsonSignature(json) == false) {
                 return
               }
 
@@ -1004,17 +1046,79 @@ const mutations = {
                 })
               }
             } else if (checkGroupManageSchema(json)) {
-              let address = oxoKeyPairs.deriveAddress(json.PublicKey)
+              let group_address = oxoKeyPairs.deriveAddress(json.PublicKey)
               let strJson = JSON.stringify(json)
               let hash = halfSHA512(strJson)
 
-              sig = json["Signature"]
-              delete json["Signature"]
-              tmpMsg = JSON.stringify(json)
-              if (!verifySignature(tmpMsg, sig, json.PublicKey)) {
-                console.log('signature invalid...')
+              if (VerifyJsonSignature(json) == false) {
                 return
               }
+
+              let SQL = `SELECT * FROM GROUPS WHERE group_hash = "${json.GroupHash}" AND group_address = '${group_address}'`
+              state.DB.get(SQL, (err, group) => {
+                if (err) {
+                  console.log(err)
+                } else {
+                  if (group != null) {
+                    SQL = `SELECT * FROM GROUP_MANAGES WHERE group_hash = "${json.GroupHash}" AND group_address = '${group_address}' ORDER BY sequence DESC`
+                    state.DB.get(SQL, (err, gmanage) => {
+                      if (err) {
+                        console.log(err)
+                      } else {
+                        if (gmanage == null && json.Sequence == 1 && json.SubAction == state.GroupManageActionCode.Create) {
+                          //first group manage
+                          SQL = `INSERT INTO GROUP_MANAGES (group_hash, sequence, json, hash, created_at)
+                          VALUES ('${group_hash}', ${json.Sequence}, '${strJson}', '${hash}', ${json.Timestamp})`
+                          state.DB.run(SQL, err => {
+                            if (err) {
+                              console.log(err)
+                            } else {
+                              SQL = `INSERT INTO GROUP_MEMBERS (group_hash, address, joined_at)
+                              VALUES ('${group_hash}', '${group_address}', ${json.Timestamp})`
+                              state.DB.run(SQL, err => {
+                                if (err) {
+                                  console.log(err)
+                                }
+                              })
+                            }
+                          })
+                        } else {
+                          if (json.Sequence != gmanage.sequence + 1 || json.PreHash != gmanage.hash) {
+                            return
+                          }
+
+                          let request = json.Request
+                          if (json.SubAction == state.GroupManageActionCode.MemberApprove && checkGroupRequestSchema(request) && VerifyJsonSignature(request) == true) {
+                            let request_address = oxoKeyPairs.deriveAddress(request.PublicKey)
+                            SQL = `INSERT INTO GROUP_MEMBERS (group_hash, address, joined_at)
+                            VALUES ('${group_hash}', '${request_address}', ${json.Timestamp})`
+                            state.DB.run(SQL, err => {
+                              if (err) {
+                                console.log(err)
+                              }
+                            })
+                          } else if (json.SubAction == state.GroupManageActionCode.MemberRelease && checkGroupRequestSchema(request) && VerifyJsonSignature(request) == true) {
+                            let request_address = oxoKeyPairs.deriveAddress(request.PublicKey)
+                            SQL = `DELETE FROM GROUP_MEMBERS WHERE group_hash = '${group_hash}' AND address = '${request_address}'`
+                            state.DB.run(SQL, err => {
+                              if (err) {
+                                console.log(err)
+                              }
+                            })
+                          } else if (json.SubAction == state.GroupManageActionCode.MemberRemove) {
+                            SQL = `DELETE FROM GROUP_MEMBERS WHERE group_hash = '${group_hash}' AND address = '${request.Address}'`
+                            state.DB.run(SQL, err => {
+                              if (err) {
+                                console.log(err)
+                              }
+                            })
+                          }
+                        }
+                      }
+                    })
+                  }
+                }
+              })
             }
           } else if (json.Action == state.ActionCode.GroupRequest) {
             let address = oxoKeyPairs.deriveAddress(json.PublicKey)
@@ -1024,23 +1128,24 @@ const mutations = {
               if (err) {
                 console.log(err)
               } else {
-                if (json.SubAction == state.GroupRequestActionCode.Join) {
-                  //save request
-                  let SQL = `SELECT * FROM GROUP_REQUESTS WHERE address = '${address}' AND group_hash = '${group.group_hash}' AND subaction = ${json.SubAction}`
-                  state.DB.get(SQL, (err, gr) => {
-                    if (err) {
-                      console.log(err)
-                    } else {
-                      if (gr == null) {
-                        //request not exist
-                        SQL = `SELECT * FROM GROUP_MEMBERS WHERE group_hash = "${group.group_hash}" AND address = '${address}'`
-                        state.DB.get(SQL, (err, gmember) => {
-                          if (err) {
-                            console.log(err)
-                          } else {
-                            if (gmember == null) {
+                if (group != null) {
+                  //i am group founder
+                  if (json.SubAction == state.GroupRequestActionCode.Join) {
+                    SQL = `SELECT * FROM GROUP_MEMBERS WHERE group_hash = "${group.group_hash}" AND address = '${address}'`
+                    state.DB.get(SQL, (err, gmember) => {
+                      if (err) {
+                        console.log(err)
+                      } else {
+                        if (gmember == null) {
+                          //not member
+                          SQL = `SELECT * FROM GROUP_REQUESTS WHERE address = '${address}' AND group_hash = '${group.group_hash}' AND subaction = ${json.SubAction}`
+                          state.DB.get(SQL, (err, grequest) => {
+                            if (err) {
+                              console.log(err)
+                            } else if (grequest == null) {
+                              //save request
                               SQL = `INSERT INTO GROUP_REQUESTS (address, group_address, group_hash, group_name, subaction, json, created_at)
-                              VALUES ('${address}', '${group.group_address}', '${group.group_hash}', '${group.group_name}', '${json.SubAction}', '${event.data}', '${json.Timestamp}')`
+                                          VALUES ('${address}', '${group.group_address}', '${group.group_hash}', '${group.group_name}', '${json.SubAction}', '${event.data}', '${json.Timestamp}')`
                               state.DB.run(SQL, err => {
                                 if (err) {
                                   console.log(err)
@@ -1048,33 +1153,60 @@ const mutations = {
                                   state.GroupRequests.push({ "address": address, "group_address": group.group_address, "group_hash": group.group_hash, "group_name": group.group_name, "subaction": json.SubAction, "timestamp": json.Timestamp, "json": event.data })
                                 }
                               })
+                            } else {
+                              //update request
+                              SQL = `UPDATE GROUP_REQUESTS SET group_name = '${group.group_name}', json = '${event.data}', created_at = ${json.Timestamp} WHERE address = '${address}' AND group_hash = '${group.group_hash}' AND subaction = ${json.SubAction}`
+                              console.log(SQL)
+                              state.DB.run(SQL, err => {
+                                if (err) {
+                                  console.log(err)
+                                } else {
+                                  for (let i = state.GroupRequests.length - 1; i >= 0; i--) {
+                                    if (state.GroupRequests[i].address == address && state.GroupRequests[i].group_hash == group.group_hash && state.GroupRequests[i].subaction == json.SubAction) {
+                                      state.GroupRequests[i].timestamp = json.Timestamp
+                                      state.GroupRequests[i].json = event.data
+                                      break
+                                    }
+                                  }
+                                }
+                              })
                             }
-                            //else already member
-                          }
-                        })
-
-                      } else {
-                        SQL = `UPDATE GROUP_REQUESTS SET group_name = '${group.group_name}', json = '${event.data}', created_at = ${json.Timestamp} WHERE address = '${address}' AND group_hash = '${group.group_hash}' AND subaction = ${json.SubAction}`
-                        console.log(SQL)
-                        state.DB.run(SQL, err => {
-                          if (err) {
-                            console.log(err)
-                          } else {
-                            for (let i = state.GroupRequests.length - 1; i >= 0; i--) {
-                              if (state.GroupRequests[i].address == address && state.GroupRequests[i].group_hash == group.group_hash && state.GroupRequests[i].subaction == json.SubAction) {
-                                state.GroupRequests[i].timestamp = json.Timestamp
-                                state.GroupRequests[i].json = event.data
-                                break
-                              }
-                            }
-                          }
-                        })
+                          })
+                        }
                       }
-                    }
-                  })
-                } else if (json.SubAction == state.GroupRequestActionCode.Leave) {
-                  //TODO
+                    })
+                  } else if (json.SubAction == state.GroupRequestActionCode.Leave) {
+                    SQL = `SELECT * FROM GROUP_MEMBERS WHERE group_hash = "${group.group_hash}" AND address = '${address}'`
+                    state.DB.get(SQL, (err, gmember) => {
+                      if (err) {
+                        console.log(err)
+                      } else {
+                        if (gmember != null) {
+                          // already member
+                          //TODO!!!
+                        }
+                      }
+                    })
+                  }
                 }
+              }
+            })
+          } else if (json.Action == state.ActionCode.GroupManageSyncSchema) {
+            console.log(`GroupManageSync`)
+            let address = oxoKeyPairs.deriveAddress(json.PublicKey)
+            let SQL = `SELECT * FROM GROUP_MANAGES WHERE group_hash = "${json.GroupHash}" AND sequence = ${json.Sequence}`
+            state.DB.get(SQL, (err, item) => {
+              if (err) {
+                console.log(err)
+              } else {
+                let group_manage = {}
+                console.log(`item`)
+                if (item != null) {
+                  console.log(item)
+                  group_manage = JSON.parse(item.json)
+                }
+                let strJson = GenObjectResponse(group_manage, address)
+                state.WS.send(strJson)
               }
             })
           }
@@ -1372,7 +1504,7 @@ const mutations = {
               if (err) {
                 console.log(err)
               } else {
-                state.GroupSessions.push({ "hash": group_hash, "name": group_name, "membership": state.GroupMemberShip.Founder })
+                state.GroupSessions.push({ "hash": group_hash, "name": group_name, "membership": state.GroupMemberShip.Founder, "timestamp": timestamp })
               }
             })
           }
@@ -1380,7 +1512,8 @@ const mutations = {
       }
     })
   },
-  GroupSubactionRequest(state, payload) {
+  //join or leave group
+  GroupRequest(state, payload) {
     let timestamp = Date.now()
     let group_address = payload.group_address
     let group_hash = payload.group_hash
@@ -1396,41 +1529,61 @@ const mutations = {
     }
     let sig = sign(JSON.stringify(json), state.PrivateKey)
     json.Signature = sig
-    //console.log(json)
+    console.log(json)
     let strJson = JSON.stringify(json)
 
-    let SQL = `SELECT * FROM GROUP_REQUESTS WHERE address = '${state.Address}' AND group_hash = '${group_hash}' AND subaction = ${subaction}`
+    let membership = state.GroupMemberShip.Applying
+    if (subaction == state.GroupRequestActionCode.Leave) {
+      membership = state.GroupMemberShip.Member
+    }
+
+    let SQL = `SELECT * FROM GROUPS WHERE group_hash = '${group_hash}'`
     state.DB.get(SQL, (err, item) => {
       if (err) {
         console.log(err)
       } else {
         if (item == null) {
-          SQL = `INSERT INTO GROUP_REQUESTS (address, group_address, group_hash, group_name, subaction, json, created_at)
-          VALUES ('${state.Address}', '${group_address}', '${group_hash}', '${group_name}', ${subaction}, '${strJson}', ${timestamp})`
+          //request not exist
+          //create group
+          SQL = `INSERT INTO GROUPS (group_hash, group_address, group_name, membership, updated_at)
+          VALUES ('${group_hash}', '${group_address}', '${group_name}', ${membership}, ${timestamp})`
           state.DB.run(SQL, err => {
             if (err) {
               console.log(err)
             } else {
-              state.GroupRequests.push({ 'address': state.Address, 'group_address': group_address, 'group_hash': group_hash, 'group_name': group_name, 'subaction': subaction, "timestamp": timestamp })
               state.WS.send(strJson)
+              state.GroupSessions.push({ "address": group_address, "hash": group_hash, "name": group_name, "membership": membership, "timestamp": timestamp })
             }
           })
-        } else {
-          SQL = `UPDATE GROUP_REQUESTS SET group_name = '${group_name}', json = '${strJson}', created_at = ${timestamp} WHERE address = '${state.Address}' AND group_hash = '${group_hash}' AND subaction = ${subaction}`
-          console.log(SQL)
+        } else if (item != null) {
+          //request exist, update time
+          SQL = `UPDATE GROUPS SET membership = ${membership}, updated_at = ${timestamp} WHERE group_address = '${group_address}' AND group_hash = '${group_hash}'`
           state.DB.run(SQL, err => {
             if (err) {
               console.log(err)
             } else {
-              for (let i = state.GroupRequests.length - 1; i >= 0; i--) {
-                if (state.GroupRequests[i].address == state.Address && state.GroupRequests[i].group_hash == group_hash && state.GroupRequests[i].subaction == subaction) {
-                  state.GroupRequests[i].group_name = group_name
-                  state.GroupRequests[i].timestamp = timestamp
-                  state.GroupRequests[i].json = json
-                  break
+              state.WS.send(strJson)
+              for (let i = state.GroupSessions.length - 1; i >= 0; i--) {
+                if (state.GroupSessions[i].address == group_address && state.GroupSessions[i].group_hash == group_hash) {
+                  state.GroupSessions[i].membership == membership
+                  state.GroupSessions[i].timestamp = timestamp
                 }
               }
-              state.WS.send(strJson)
+            }
+          })
+
+          //sync group manage
+          SQL = `SELECT * FROM GROUP_MANAGES WHERE group_hash = '${group_hash}' ORDER BY sequence DESC`
+          state.DB.get(SQL, (err, item) => {
+            if (err) {
+              console.log(err)
+            } else {
+              let sequence = 0
+              if (item != null) {
+                sequence = item.sequence + 1
+              }
+              let strRequest = GenGroupManageRequest(group_hash, sequence, group_address)
+              state.WS.send(strRequest)
             }
           })
         }
@@ -1497,7 +1650,7 @@ const mutations = {
                             "Timestamp": Date.now(),
                             "PublicKey": state.PublicKey,
                           }
-                          responseSig = sign(JSON.stringify(response), state.PrivateKey)
+                          let responseSig = sign(JSON.stringify(response), state.PrivateKey)
                           response.Signature = responseSig
                           let strResponse = JSON.stringify(response)
                           state.WS.send(strResponse)
@@ -1508,14 +1661,24 @@ const mutations = {
                           state.DB.run(SQL, err => {
                             if (err) {
                               console.log(err)
-                            } else {}
+                            }
                           })
 
                           SQL = `DELETE FROM GROUP_REQUESTS WHERE group_hash = '${group_hash}' AND address = '${address}'`
                           state.DB.run(SQL, err => {
                             if (err) {
                               console.log(err)
-                            } else {}
+                            } else {
+                              let i = state.GroupRequests.length - 1
+                              for (; i >= 0; i--) {
+                                if (state.GroupRequests[i].address == address) {
+                                  break
+                                }
+                              }
+                              if (i != -1) {
+                                state.GroupRequests.splice(i, 1)
+                              }
+                            }
                           })
                         }
                       })
@@ -1525,6 +1688,25 @@ const mutations = {
               }
             }
           })
+        }
+      }
+    })
+  },
+  LoadGroupMember(state, payload) {
+    state.CurrenrGroupMembers = []
+
+    for (var i = state.GroupSessions.length - 1; i >= 0; i--) {
+      if (payload.group_hash == state.GroupSessions[i].hash) {
+        state.CurrentGroup = state.GroupSessions[i]
+      }
+    }
+    let SQL = `SELECT * FROM GROUP_MEMBERS WHERE group_hash = '${payload.group_hash}' ORDER BY joined_at DESC`
+    state.DB.all(SQL, (err, items) => {
+      if (err) {
+        console.log(err)
+      } else {
+        for (const item of items) {
+          state.CurrenrGroupMembers.push({ 'address': item.address, 'joined_at': item.joined_at })
         }
       }
     })
@@ -1755,6 +1937,9 @@ const getters = {
   },
   getAddress: (state) => {
     return state.Address
+  },
+  getCurrentGroupAddress: (state) => {
+    return state.CurrentGroup.address
   },
   getNameByAddress: (state) => (address) => {
     if (address == state.Address) {
