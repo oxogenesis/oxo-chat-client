@@ -33,7 +33,7 @@
     <ul>
       <li v-for="request in this.$store.state.OXO.GroupRequests">
         {{getNameByAddress(request.address)}}
-        =>{{request.group_name}}
+        =>{{getGroupNameByHash(request.group_hash)}}
         @{{request.timestamp | time}}
         <input type="button" value="同意" @click="permitJoin(request.address, request.group_hash, request.json)" />
         <br>
@@ -64,6 +64,7 @@ export default {
   computed: {
     ...mapGetters({
       getAddress: 'getAddress',
+      getGroupNameByHash: 'getGroupNameByHash',
       getNameByAddress: 'getNameByAddress'
     })
   },
