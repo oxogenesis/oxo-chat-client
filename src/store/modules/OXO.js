@@ -7,6 +7,7 @@ import {
   DHSequence,
   Epoch
 } from '../../utils/oxo.js'
+
 import {
   checkJsonSchema,
   checkBulletinSchema,
@@ -58,6 +59,9 @@ const state = {
   Quotes: [],
   DisplayQuotes: [],
 
+  //for group_hash => group_name
+  Groups: {},
+  //for group list
   GroupSessions: [],
   GroupRequests: [],
   CurrentGroupSession: '',
@@ -202,6 +206,7 @@ function SyncGroupManage(group_hash, to) {
         sequence = item.sequence
       }
       let strRequest = GenGroupManageRequest(group_hash, sequence, to)
+      console.log(strRequest)
       state.WS.send(strRequest)
     }
   })
@@ -346,6 +351,7 @@ const mutations = {
     state.DisplayQuotes = []
 
     //group
+    state.Groups = {}
     state.GroupSessions = []
     state.GroupRequests = []
     state.CurrentGroupSession = ''
@@ -604,10 +610,7 @@ const mutations = {
 
       state.DB.run(`CREATE TABLE IF NOT EXISTS GROUP_REQUESTS(
         address VARCHAR(32) NOT NULL,
-        group_address VARCHAR(32) NOT NULL,
         group_hash VARCHAR(32) NOT NULL,
-        group_name text NOT NULL,
-        subaction INTEGER,
         json TEXT,
         created_at INTEGER,
         PRIMARY KEY (group_hash, address)
@@ -727,6 +730,7 @@ const mutations = {
       } else {
         for (const item of items) {
           state.GroupSessions.push({ "address": item.group_address, "hash": item.group_hash, "name": item.group_name, "membership": item.membership, "timestamp": item.updated_at })
+          state.Groups[item.group_hash] = item.group_name
         }
       }
     })
@@ -737,7 +741,7 @@ const mutations = {
         console.log(err)
       } else {
         for (const item of items) {
-          state.GroupRequests.push({ "address": item.address, "group_address": item.group_address, "group_hash": item.group_hash, "group_name": item.group_name, "subaction": item.subaction, "timestamp": item.created_at, "json": item.json })
+          state.GroupRequests.push({ "address": item.address, "group_hash": item.group_hash, "timestamp": item.created_at, "json": item.json })
         }
       }
     })
@@ -1011,16 +1015,17 @@ const mutations = {
             })
           } else if (json.Action == state.ActionCode.ObjectResponse) {
             let address = oxoKeyPairs.deriveAddress(json.PublicKey)
-            json = json.Object
-            console.log(json)
-            if (checkGroupMessageSchema(json)) {
+            let objectJson = json.Object
+            console.log(objectJson)
+            if (checkGroupMessageSchema(objectJson)) {
 
-            } else if (checkBulletinSchema(json)) {
-              let address = oxoKeyPairs.deriveAddress(json.PublicKey)
-              let strJson = JSON.stringify(json)
+            } else if (checkBulletinSchema(objectJson)) {
+              let bulletinJson = objectJson
+              let address = oxoKeyPairs.deriveAddress(bulletinJson.PublicKey)
+              let strJson = JSON.stringify(bulletinJson)
               let hash = halfSHA512(strJson)
 
-              if (VerifyJsonSignature(json) == false) {
+              if (VerifyJsonSignature(bulletinJson) == false) {
                 return
               }
 
@@ -1029,15 +1034,15 @@ const mutations = {
                 let timestamp = Date.now()
                 //save bulletin
                 let SQL = `INSERT INTO BULLETINS (address, sequence, pre_hash, content, timestamp, json, created_at, hash, quote_size)
-                VALUES ('${address}', ${json.Sequence}, '${json.PreHash}', '${json.Content}', '${json.Timestamp}', '${strJson}', ${timestamp}, '${hash}', ${json.Quote.length})`
+                VALUES ('${address}', ${bulletinJson.Sequence}, '${bulletinJson.PreHash}', '${bulletinJson.Content}', '${bulletinJson.Timestamp}', '${strJson}', ${timestamp}, '${hash}', ${bulletinJson.Quote.length})`
                 state.DB.run(SQL, err => {
                   if (err) {
                     console.log(err)
                   } else {
                     if (state.CurrentBBSession == "*" || state.CurrentBBSession == address) {
-                      state.Bulletins.unshift({ "address": address, "name": state.Contacts[address], "timestamp": json.Timestamp, "created_at": timestamp, 'sequence': json.Sequence, "content": json.Content, 'hash': hash, 'quote_size': json.Quote.length })
+                      state.Bulletins.unshift({ "address": address, "name": state.Contacts[address], "timestamp": bulletinJson.Timestamp, "created_at": timestamp, 'sequence': bulletinJson.Sequence, "content": bulletinJson.Content, 'hash': hash, 'quote_size': bulletinJson.Quote.length })
                     }
-                    let strJson = GenBulletinRequest(address, json.Sequence + 1, address)
+                    let strJson = GenBulletinRequest(address, bulletinJson.Sequence + 1, address)
                     state.WS.send(strJson)
                   }
                 })
@@ -1046,54 +1051,56 @@ const mutations = {
                 let timestamp = Date.now()
                 //save bulletin
                 let SQL = `INSERT INTO BULLETINS (address, sequence, pre_hash, content, timestamp, json, created_at, hash, quote_size)
-                VALUES ('${address}', ${json.Sequence}, '${json.PreHash}', '${json.Content}', '${json.Timestamp}', '${strJson}', ${timestamp}, '${hash}', ${json.Quote.length})`
+                VALUES ('${address}', ${bulletinJson.Sequence}, '${bulletinJson.PreHash}', '${bulletinJson.Content}', '${bulletinJson.Timestamp}', '${strJson}', ${timestamp}, '${hash}', ${bulletinJson.Quote.length})`
                 state.DB.run(SQL, err => {
                   if (err) {
                     console.log(err)
                   } else {
                     for (let i = state.DisplayQuotes.length - 1; i >= 0; i--) {
                       if (hash == state.DisplayQuotes[i].hash) {
-                        state.DisplayQuotes[i].timestamp = json.Timestamp
+                        state.DisplayQuotes[i].timestamp = bulletinJson.Timestamp
                         state.DisplayQuotes[i].created_at = timestamp
-                        state.DisplayQuotes[i].content = json.Content
-                        state.DisplayQuotes[i].quote_size = json.Quote.length
+                        state.DisplayQuotes[i].content = bulletinJson.Content
+                        state.DisplayQuotes[i].quote_size = bulletinJson.Quote.length
                       }
                     }
                   }
                 })
               }
-            } else if (checkGroupManageSchema(json)) {
-              let group_address = oxoKeyPairs.deriveAddress(json.PublicKey)
-              let strJson = JSON.stringify(json)
+            } else if (checkGroupManageSchema(objectJson)) {
+              console.log(`GroupManage`)
+              let groupManageJson = objectJson
+              let group_address = oxoKeyPairs.deriveAddress(groupManageJson.PublicKey)
+              let strJson = JSON.stringify(groupManageJson)
               let hash = halfSHA512(strJson)
 
-              if (VerifyJsonSignature(json) == false) {
+              if (VerifyJsonSignature(groupManageJson) == false) {
                 return
               }
 
               let group = null
               for (let i = state.GroupSessions.length - 1; i >= 0; i--) {
-                if (json.GroupHash == state.GroupSessions[i].hash && group_address == state.GroupSessions[i].address) {
+                if (groupManageJson.GroupHash == state.GroupSessions[i].hash && group_address == state.GroupSessions[i].address) {
                   group = state.GroupSessions[i]
                   break
                 }
               }
               if (group != null) {
-                let SQL = `SELECT * FROM GROUP_MANAGES WHERE group_hash = "${json.GroupHash}" ORDER BY sequence DESC`
+                let SQL = `SELECT * FROM GROUP_MANAGES WHERE group_hash = "${groupManageJson.GroupHash}" ORDER BY sequence DESC`
                 state.DB.get(SQL, (err, gmanage) => {
                   if (err) {
                     console.log(err)
                   } else {
-                    if (gmanage == null && json.Sequence == 1 && json.SubAction == state.GroupManageActionCode.Create) {
+                    if (gmanage == null && groupManageJson.Sequence == 1 && groupManageJson.SubAction == state.GroupManageActionCode.Create) {
                       //first group manage
                       SQL = `INSERT INTO GROUP_MANAGES (group_hash, sequence, json, hash, created_at)
-                      VALUES ('${json.GroupHash}', ${json.Sequence}, '${strJson}', '${hash}', ${json.Timestamp})`
+                      VALUES ('${groupManageJson.GroupHash}', ${groupManageJson.Sequence}, '${strJson}', '${hash}', ${groupManageJson.Timestamp})`
                       state.DB.run(SQL, err => {
                         if (err) {
                           console.log(err)
                         } else {
                           SQL = `INSERT INTO GROUP_MEMBERS (group_hash, address, joined_at)
-                          VALUES ('${json.GroupHash}', '${group_address}', ${json.Timestamp})`
+                          VALUES ('${groupManageJson.GroupHash}', '${group_address}', ${groupManageJson.Timestamp})`
                           state.DB.run(SQL, err => {
                             if (err) {
                               console.log(err)
@@ -1102,37 +1109,115 @@ const mutations = {
                         }
                       })
                     } else {
-                      if (json.Sequence != gmanage.sequence + 1) {
-                        let strJson = GenGroupManageRequest(group.hash, address)
-                        state.WS.send(strJson)
+                      if (groupManageJson.Sequence < gmanage.sequence) {
+                        state.WS.send()
                         return
-                      } else if (json.PreHash != gmanage.hash) {
+                      } else if (groupManageJson.Sequence == gmanage.sequence) {
                         return
-                      }
+                      } else if (groupManageJson.Sequence > gmanage.sequence + 1) {
+                        let strRequestJson = GenGroupManageRequest(group.hash, gmanage.sequence, address)
+                        state.WS.send(strRequestJson)
+                        return
+                      } else if (groupManageJson.PreHash == gmanage.hash) {
+                        //insert group manage
+                        SQL = `INSERT INTO GROUP_MANAGES (group_hash, sequence, json, hash, created_at)
+                        VALUES ('${groupManageJson.GroupHash}', ${groupManageJson.Sequence}, '${strJson}', '${hash}', ${groupManageJson.Timestamp})`
+                        state.DB.run(SQL, err => {
+                          if (err) {
+                            console.log(err)
+                          } else {
+                            let request = groupManageJson.Request
+                            if (groupManageJson.SubAction == state.GroupManageActionCode.MemberApprove && checkGroupRequestSchema(request) && VerifyJsonSignature(request) == true) {
+                              let request_address = oxoKeyPairs.deriveAddress(request.PublicKey)
+                              SQL = `INSERT INTO GROUP_MEMBERS (group_hash, address, joined_at)
+                              VALUES ('${groupManageJson.GroupHash}', '${request_address}', ${groupManageJson.Timestamp})`
+                              state.DB.run(SQL, err => {
+                                if (err) {
+                                  console.log(err)
+                                } else {
+                                  if (groupManageJson.GroupHash == state.CurrentGroupSession) {
+                                    //update current member
+                                    state.CurrenrGroupMembers.push({ 'address': request_address, 'joined_at': groupManageJson.Timestamp })
+                                  }
+                                  if (request_address == state.Address) {
+                                    //my request
+                                    SQL = `UPDATE GROUPS SET membership = '${state.GroupMemberShip.Member}', updated_at = ${groupManageJson.Timestamp} WHERE group_address = '${group_address}' AND group_hash = '${groupManageJson.GroupHash}'`
+                                    console.log(SQL)
+                                    state.DB.run(SQL, err => {
+                                      if (err) {
+                                        console.log(err)
+                                      } else {
+                                        //update group membership
+                                        for (let i = state.GroupSessions.length - 1; i >= 0; i--) {
+                                          if (state.GroupSessions[i].hash == groupManageJson.GroupHash) {
+                                            state.GroupSessions[i].membership = state.GroupMemberShip.Member
+                                          }
+                                        }
+                                      }
+                                    })
+                                  }
+                                }
+                              })
+                            } else if (groupManageJson.SubAction == state.GroupManageActionCode.MemberRelease && checkGroupRequestSchema(request) && VerifyJsonSignature(request) == true) {
+                              let request_address = oxoKeyPairs.deriveAddress(request.PublicKey)
+                              SQL = `DELETE FROM GROUP_MEMBERS WHERE group_hash = '${groupManageJson.GroupHash}' AND address = '${request_address}'`
+                              state.DB.run(SQL, err => {
+                                if (err) {
+                                  console.log(err)
+                                } else {
+                                  if (groupManageJson.GroupHash == state.CurrentGroupSession) {
+                                    //update current member
+                                    let i = state.CurrenrGroupMembers.length - 1
+                                    for (; i >= 0; i--) {
+                                      if (state.CurrenrGroupMembers[i].address == request_address) {
+                                        break
+                                      }
+                                    }
+                                    if (i != -1) {
+                                      state.CurrenrGroupMembers.splice(i, 1)
+                                    }
+                                  }
 
-                      let request = json.Request
-                      if (json.SubAction == state.GroupManageActionCode.MemberApprove && checkGroupRequestSchema(request) && VerifyJsonSignature(request) == true) {
-                        let request_address = oxoKeyPairs.deriveAddress(request.PublicKey)
-                        SQL = `INSERT INTO GROUP_MEMBERS (group_hash, address, joined_at)
-                        VALUES ('${json.GroupHash}', '${request_address}', ${json.Timestamp})`
-                        state.DB.run(SQL, err => {
-                          if (err) {
-                            console.log(err)
-                          }
-                        })
-                      } else if (json.SubAction == state.GroupManageActionCode.MemberRelease && checkGroupRequestSchema(request) && VerifyJsonSignature(request) == true) {
-                        let request_address = oxoKeyPairs.deriveAddress(request.PublicKey)
-                        SQL = `DELETE FROM GROUP_MEMBERS WHERE group_hash = '${json.GroupHash}' AND address = '${request_address}'`
-                        state.DB.run(SQL, err => {
-                          if (err) {
-                            console.log(err)
-                          }
-                        })
-                      } else if (json.SubAction == state.GroupManageActionCode.MemberRemove) {
-                        SQL = `DELETE FROM GROUP_MEMBERS WHERE group_hash = '${json.GroupHash}' AND address = '${request.Address}'`
-                        state.DB.run(SQL, err => {
-                          if (err) {
-                            console.log(err)
+                                  if (request_address == state.Address) {
+                                    //my request
+                                    SQL = `UPDATE GROUPS SET membership = '${state.GroupMemberShip.Exited}', updated_at = ${groupManageJson.Timestamp} WHERE group_address = '${group_address}' AND group_hash = '${groupManageJson.GroupHash}'`
+                                    console.log(SQL)
+                                    state.DB.run(SQL, err => {
+                                      if (err) {
+                                        console.log(err)
+                                      } else {
+                                        //update group membership
+                                        for (let i = state.GroupSessions.length - 1; i >= 0; i--) {
+                                          if (state.GroupSessions[i].hash == groupManageJson.GroupHash) {
+                                            state.GroupSessions[i].membership = state.GroupMemberShip.Exited
+                                          }
+                                        }
+                                      }
+                                    })
+                                  }
+                                }
+                              })
+                            } else if (groupManageJson.SubAction == state.GroupManageActionCode.MemberRemove) {
+                              SQL = `DELETE FROM GROUP_MEMBERS WHERE group_hash = '${groupManageJson.GroupHash}' AND address = '${request.Address}'`
+                              state.DB.run(SQL, err => {
+                                if (err) {
+                                  console.log(err)
+                                } else {
+                                  if (groupManageJson.GroupHash == state.CurrentGroupSession) {
+                                    //update current member
+                                    let i = state.CurrenrGroupMembers.length - 1
+                                    for (; i >= 0; i--) {
+                                      if (state.CurrenrGroupMembers[i].address == request_address) {
+                                        break
+                                      }
+                                    }
+                                    if (i != -1) {
+                                      state.CurrenrGroupMembers.splice(i, 1)
+                                    }
+                                  }
+                                }
+                              })
+                            }
                           }
                         })
                       }
@@ -1142,6 +1227,7 @@ const mutations = {
               }
             }
           } else if (json.Action == state.ActionCode.GroupRequest) {
+            console.log(`GroupRequest`)
             let address = oxoKeyPairs.deriveAddress(json.PublicKey)
 
             let group = null
@@ -1162,31 +1248,31 @@ const mutations = {
                   } else {
                     if (gmember == null) {
                       //not member
-                      SQL = `SELECT * FROM GROUP_REQUESTS WHERE address = '${address}' AND group_hash = '${group.hash}' AND subaction = ${json.SubAction}`
+                      SQL = `SELECT * FROM GROUP_REQUESTS WHERE address = '${address}' AND group_hash = '${group.hash}'`
                       state.DB.get(SQL, (err, grequest) => {
                         if (err) {
                           console.log(err)
                         } else if (grequest == null) {
                           //save request
-                          SQL = `INSERT INTO GROUP_REQUESTS (address, group_address, group_hash, group_name, subaction, json, created_at)
-                                          VALUES ('${address}', '${group.address}', '${group.hash}', '${group.name}', '${json.SubAction}', '${event.data}', '${json.Timestamp}')`
+                          SQL = `INSERT INTO GROUP_REQUESTS (address, group_hash, json, created_at)
+                          VALUES ('${address}', '${group.hash}', '${event.data}', '${json.Timestamp}')`
                           state.DB.run(SQL, err => {
                             if (err) {
                               console.log(err)
                             } else {
-                              state.GroupRequests.push({ "address": address, "group_address": group.address, "group_hash": group.hash, "group_name": group.name, "subaction": json.SubAction, "timestamp": json.Timestamp, "json": event.data })
+                              state.GroupRequests.push({ "address": address, "group_hash": group.hash, "timestamp": json.Timestamp, "json": event.data })
                             }
                           })
                         } else {
                           //update request
-                          SQL = `UPDATE GROUP_REQUESTS SET group_name = '${group.name}', json = '${event.data}', created_at = ${json.Timestamp} WHERE address = '${address}' AND group_hash = '${group.hash}' AND subaction = ${json.SubAction}`
+                          SQL = `UPDATE GROUP_REQUESTS SET json = '${event.data}', created_at = ${json.Timestamp} WHERE address = '${address}' AND group_hash = '${group.hash}'`
                           console.log(SQL)
                           state.DB.run(SQL, err => {
                             if (err) {
                               console.log(err)
                             } else {
                               for (let i = state.GroupRequests.length - 1; i >= 0; i--) {
-                                if (state.GroupRequests[i].address == address && state.GroupRequests[i].group_hash == group.hash && state.GroupRequests[i].subaction == json.SubAction) {
+                                if (state.GroupRequests[i].address == address && state.GroupRequests[i].group_hash == group.hash) {
                                   state.GroupRequests[i].timestamp = json.Timestamp
                                   state.GroupRequests[i].json = event.data
                                   break
@@ -1528,6 +1614,7 @@ const mutations = {
                 console.log(err)
               } else {
                 state.GroupSessions.push({ "hash": group_hash, "name": group_name, "membership": state.GroupMemberShip.Founder, "timestamp": timestamp })
+                state.Groups[group_hash] = group_name
               }
             })
           }
@@ -1552,8 +1639,8 @@ const mutations = {
     }
     let sig = sign(JSON.stringify(json), state.PrivateKey)
     json.Signature = sig
-    console.log(json)
     let strJson = JSON.stringify(json)
+    console.log(strJson)
 
     let membership = state.GroupMemberShip.Applying
     if (subaction == state.GroupRequestActionCode.Leave) {
@@ -1567,12 +1654,11 @@ const mutations = {
         state.GroupSessions[i].name = group_name
         state.GroupSessions[i].membership = membership
         state.GroupSessions[i].timestamp = timestamp
+        state.Groups[group_hash] = group_name
         break
       }
     }
-    
-    SyncGroupManage(group_hash, group_address)
-    
+
     if (group == null) {
       //group not exist
       //create group
@@ -1584,16 +1670,19 @@ const mutations = {
         } else {
           state.WS.send(strJson)
           state.GroupSessions.push({ "address": group_address, "hash": group_hash, "name": group_name, "membership": membership, "timestamp": timestamp })
+          state.Groups[group_hash] = group_name
+          SyncGroupManage(group_hash, group_address)
         }
       })
     } else if (group != null) {
       //group exist, update time
-      let SQL = `UPDATE GROUPS SET group_name = '${group_name}',membership = ${membership}, updated_at = ${timestamp} WHERE group_address = '${group_address}' AND group_hash = '${group_hash}'`
+      let SQL = `UPDATE GROUPS SET group_name = '${group_name}', membership = ${membership}, updated_at = ${timestamp} WHERE group_address = '${group_address}' AND group_hash = '${group_hash}'`
       state.DB.run(SQL, err => {
         if (err) {
           console.log(err)
         } else {
           state.WS.send(strJson)
+          SyncGroupManage(group_hash, group_address)
         }
       })
     }
@@ -1956,6 +2045,13 @@ const getters = {
       return address
     } else {
       return state.Contacts[address]
+    }
+  },
+  getGroupNameByHash: (state) => (hash) => {
+    if (state.Groups[hash] == null) {
+      return hash
+    } else {
+      return state.Groups[hash]
     }
   },
   //chat
