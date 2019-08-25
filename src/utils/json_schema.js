@@ -279,7 +279,7 @@ let GroupManageSchema = {
     //remove member:3    Request = {"Address":address}
     //member release:4   need Request
     "SubAction": {
-      "type": "string"
+      "type": "number"
     },
     "Request": {
       "type": "object"
@@ -444,7 +444,7 @@ function checkJsonSchema(strJson) {
   if (typeof strJson == "string") {
     try {
       let json = JSON.parse(strJson)
-      if (vObjectResponseSchema(json) || vBulletinRequestSchema(json) || vChatMessageSchema(json) || vChatSyncSchema(json) || vChatDHSchema(json) || vDeclare(json) || vGroupManageSchema(json) || vGroupManageSyncSchema(json) || vGroupDHSchema(json) || vGroupMessageSchema(json) || vGroupMessageSyncSchema(json) || vGroupRequestSchema(json)) {
+      if (vObjectResponseSchema(json) || vBulletinRequestSchema(json) || vChatMessageSchema(json) || vChatSyncSchema(json) || vChatDHSchema(json) || vDeclare(json) || vGroupManageSyncSchema(json) || vGroupDHSchema(json) || vGroupMessageSyncSchema(json) || vGroupRequestSchema(json)) {
         return json
       } else {
         return false
