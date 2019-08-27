@@ -1286,14 +1286,71 @@ const mutations = {
                   }
                 })
               } else if (json.SubAction == state.GroupRequestActionCode.Leave) {
-                let SQL = `SELECT * FROM GROUP_MEMBERS WHERE group_hash = "${group.group_hash}" AND address = '${address}'`
+                let SQL = `SELECT * FROM GROUP_MEMBERS WHERE group_hash = "${group.hash}" AND address = '${address}'`
                 state.DB.get(SQL, (err, gmember) => {
                   if (err) {
                     console.log(err)
                   } else {
                     if (gmember != null) {
                       // already member
-                      //TODO!!!
+                      SQL = `SELECT * FROM GROUP_MANAGES WHERE group_hash = '${group_hash}' ORDER BY sequence DESC`
+                      state.DB.get(SQL, (err, gmanage) => {
+                        if (err) {
+                          console.log(err)
+                        } else {
+                          if (gmanage != null) {
+                            //get group sequence
+                            //gen manage json
+                            let timestamp = Date.now()
+                            let groupManageJson = {
+                              "Action": state.ActionCode.GroupManage,
+                              "GroupHash": group_hash,
+                              "Sequence": gmanage.sequence + 1,
+                              "PreHash": gmanage.hash,
+                              "SubAction": state.GroupManageActionCode.MemberRelease,
+                              "Request": JSON.parse(json),
+                              "Timestamp": timestamp,
+                              "PublicKey": state.PublicKey
+                            }
+                            let sig = sign(JSON.stringify(groupManageJson), state.PrivateKey)
+                            groupManageJson.Signature = sig
+                            //console.log(groupManageJson)
+                            let groupManageStr = JSON.stringify(groupManageJson)
+                            let hash = halfSHA512(groupManageStr)
+
+                            SQL = `INSERT INTO GROUP_MANAGES (group_hash, sequence, json, hash, created_at)
+                            VALUES ('${group_hash}', ${gmanage.sequence + 1}, '${groupManageStr}', '${hash}', ${timestamp})`
+                            state.DB.run(SQL, err => {
+                              if (err) {
+                                console.log(err)
+                              } else {
+                                let response = {
+                                  "Action": state.ActionCode.ObjectResponse,
+                                  "Object": groupManageJson,
+                                  "To": address,
+                                  "Timestamp": Date.now(),
+                                  "PublicKey": state.PublicKey,
+                                }
+                                let responseSig = sign(JSON.stringify(response), state.PrivateKey)
+                                response.Signature = responseSig
+                                let strResponse = JSON.stringify(response)
+                                state.WS.send(strResponse)
+                                console.log(strResponse)
+                                SQL = `DELETE FROM GROUP_MEMBERS WHERE group_hash = '${group_hash}' AND address = '${address}'`
+
+                                state.DB.run(SQL, err => {
+                                  if (err) {
+                                    console.log(err)
+                                  }
+                                })
+                              }
+                            })
+                          }
+                        }
+                      })
+                    } else {
+                      //not a member
+                      //do nothing
                     }
                   }
                 })
@@ -1613,7 +1670,7 @@ const mutations = {
               if (err) {
                 console.log(err)
               } else {
-                state.GroupSessions.push({ "hash": group_hash, "name": group_name, "membership": state.GroupMemberShip.Founder, "timestamp": timestamp })
+                state.GroupSessions.push({ "address": state.Address, "hash": group_hash, "name": group_name, "membership": state.GroupMemberShip.Founder, "timestamp": timestamp })
                 state.Groups[group_hash] = group_name
               }
             })
