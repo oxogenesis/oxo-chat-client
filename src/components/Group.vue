@@ -18,11 +18,10 @@
         <span v-if="group.membership == 0">申请中</span>
         <span v-if="group.membership == 1">创始人</span>
         <span v-if="group.membership == 2">已加入</span>
-        <span v-if="group.membership == 3">退出中</span>
-        <span v-if="group.membership == 4">已退出</span>
+        <span v-if="group.membership == 3">已退出</span>
         ):
         @{{group.timestamp | time}}
-        <input v-if="group.membership == 0" type="button" value="申请加入" @click="reRequest(1, group.address, group.hash, group.name)" />
+        <input v-if="group.membership == 0 || group.membership == 3" type="button" value="申请加入" @click="reRequest(1, group.address, group.hash, group.name)" />
         <input v-if="group.membership == 2" type="button" value="申请退出" @click="reRequest(0, group.address, group.hash, group.name)" />
         <br>
         群号:{{group.hash}}
