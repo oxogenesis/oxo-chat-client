@@ -10,7 +10,7 @@
       <li v-for="member in this.$store.state.OXO.CurrenrGroupMembers">
         {{getNameByAddress(member.address)}}
         @{{member.joined_at | time}}
-        <input v-if="getCurrentGroupAddress != member.address && getCurrentGroupAddress == getAddress" type="button" value="移除" @click="removeMember()" />
+        <input v-if="getCurrentGroupAddress != member.address && getCurrentGroupAddress == getAddress" type="button" value="移除" @click="removeGroupMember(member.address)" />
         <br>
       </li>
     </ul>
@@ -44,17 +44,12 @@ export default {
     })
   },
   methods: {
-    removeMember() {
-      let group_name = document.querySelector('input#input_group_name1').value
-      if (group_name == "") {
-        alert("群组名不能为空...")
-        return
-      } else {
-        this.$store.commit({
-          type: 'CreateGroup',
-          group_name: group_name
-        })
-      }
+    removeGroupMember(member_address) {
+      this.$store.commit({
+        type: 'RemoveGroupMember',
+        group_hash: this.$route.params.group_hash,
+        member_address: member_address
+      })
     }
   }
 }
