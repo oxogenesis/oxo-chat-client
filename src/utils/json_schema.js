@@ -95,10 +95,13 @@ let BulletinRequestSchema = {
 
 let ObjectResponseSchema = {
   "type": "object",
-  "required": ["Action", "Object", "To", "Timestamp", "PublicKey", "Signature"],
-  "maxProperties": 6,
+  "required": ["Action", "ObjectType", "Object", "To", "Timestamp", "PublicKey", "Signature"],
+  "maxProperties": 7,
   "properties": {
     "Action": {
+      "type": "number"
+    },
+    "ObjectType": {
       "type": "number"
     },
     "Object": {
@@ -359,7 +362,7 @@ let GroupDHSchema = {
 
 let GroupMessageSchema = {
   "type": "object",
-  "required": ["Action", "GroupHash", "Sequence", "PreHash", "Confirm", "Content", "Timestamp", "PublicKey", "Signature"],
+  "required": ["Action", "GroupHash", "Sequence", "PreHash", "ConfirmHash", "Content", "Timestamp", "PublicKey", "Signature"],
   "maxProperties": 9,
   "properties": {
     "Action": {
@@ -374,13 +377,10 @@ let GroupMessageSchema = {
     "PreHash": {
       "type": "string"
     },
-    "Confirm": {
+    "ConfirmHash": {
       "type": "string"
     },
     "Content": {
-      "type": "string"
-    },
-    "To": {
       "type": "string"
     },
     "Timestamp": {
@@ -458,6 +458,7 @@ function checkJsonSchema(strJson) {
 }
 
 var vBulletinSchema = ajv.compile(BulletinSchema)
+
 function checkBulletinSchema(json) {
   //console.log(json)
   try {
@@ -474,6 +475,7 @@ function checkBulletinSchema(json) {
 }
 
 var vGroupManageSchema = ajv.compile(GroupManageSchema)
+
 function checkGroupManageSchema(json) {
   //console.log(json)
   try {
@@ -490,6 +492,7 @@ function checkGroupManageSchema(json) {
 }
 
 var vGroupMessageSchema = ajv.compile(GroupMessageSchema)
+
 function checkGroupMessageSchema(json) {
   //console.log(json)
   try {
