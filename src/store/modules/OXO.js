@@ -65,6 +65,9 @@ const state = {
   GroupSessions: [],
   GroupRequests: [],
   CurrentGroupSession: '',
+  CurrentGroupMessageSequence: 0,
+  CurrentGroupMessageHash: GenesisHash,
+  GroupMessages: [],
 
   CurrentGroup: {},
   CurrenrGroupMembers: [],
@@ -105,6 +108,12 @@ const state = {
     "Founder": 1,
     "Member": 2,
     "Exited": 3
+  },
+
+  ObjectType: {
+    "Bulletin": 201,
+    "GroupManage": 202,
+    "GroupMessage": 203
   },
 
 
@@ -213,9 +222,10 @@ function SyncGroupManage(group_hash, to) {
   })
 }
 
-function GenObjectResponse(object, to) {
+function GenObjectResponse(objectType, object, to) {
   let json = {
     "Action": state.ActionCode.ObjectResponse,
+    "ObjectType": objectType,
     "Object": object,
     "To": to,
     "Timestamp": Date.now(),
@@ -225,6 +235,83 @@ function GenObjectResponse(object, to) {
   json.Signature = sig
   let strJson = JSON.stringify(json)
   return strJson
+}
+
+function Broadcast2Group(objectType, group_hash, object) {
+  let SQL = `SELECT * FROM GROUP_MEMBERS WHERE group_hash = '${group_hash}'`
+  state.DB.all(SQL, (err, items) => {
+    if (err) {
+      console.log(err)
+    } else {
+      for (const item of items) {
+        if (item.address != state.Address) {
+          if (objectType != state.ObjectType.GroupMessage) {
+            let strJson = GenObjectResponse(objectType, object, item.address)
+            state.WS.send(strJson)
+          } else {
+            if (item.aes_key != null) {
+              let key = item.aes_key.slice(0, 32)
+              let iv = item.aes_key.slice(32, 48)
+              let msg = encrypt(key, iv, object)
+              console.log(msg)
+              let strJson = GenObjectResponse(objectType, { "GroupHash": group_hash, "GroupMessage": msg }, item.address)
+              state.WS.send(strJson)
+            } else {
+              GroupHandshake(group_hash, item.address)
+            }
+          }
+        }
+      }
+    }
+  })
+}
+
+function GroupHandshake(group_hash, address) {
+  let timestamp = Date.now()
+  let SQL = `SELECT * FROM GROUP_MEMBERS WHERE group_hash = '${group_hash}' AND address = '${address}'`
+  state.DB.get(SQL, (err, item) => {
+    if (err) {
+      console.log(err)
+    } else {
+      if (item != null) {
+        if (item.aes_key != null) {
+          console.log(`group aes exist`)
+        } else if (item.self_json != null) {
+          state.WS.send(item.self_json)
+        } else {
+          let ecdh = crypto.createECDH('secp256k1')
+          let ecdh_pk = ecdh.generateKeys('hex')
+          let ecdh_sk = ecdh.getPrivateKey('hex')
+
+          //gen message with my-pk, indicate self ready
+          let selfJson = {
+            "Action": state.ActionCode.GroupDH,
+            "GroupHash": group_hash,
+            "DHPublicKey": ecdh_pk,
+            "Pair": '',
+            "To": address,
+            "Timestamp": timestamp,
+            "PublicKey": state.PublicKey
+          }
+          let sig = sign(JSON.stringify(selfJson), state.PrivateKey)
+          selfJson.Signature = sig
+          let strSelfJson = JSON.stringify(selfJson)
+          console.log(strSelfJson)
+
+          //save my-sk-pk, self-not-ready-json
+          SQL = `UPDATE GROUP_MEMBERS SET private_key = '${ecdh_sk}', self_json = '${strSelfJson}' WHERE group_hash = "${group_hash}" AND address = '${address}'`
+
+          state.DB.run(SQL, err => {
+            if (err) {
+              console.log(err)
+            } else {
+              state.WS.send(strSelfJson)
+            }
+          })
+        }
+      }
+    }
+  })
 }
 
 function SaveChatMessage(sour_address, json) {
@@ -356,6 +443,9 @@ const mutations = {
     state.GroupSessions = []
     state.GroupRequests = []
     state.CurrentGroupSession = ''
+    state.CurrentGroupMessageSequence = 0
+    state.CurrentGroupMessageHash = GenesisHash
+    state.GroupMessages = []
     state.CurrentGroup = {}
     state.CurrenrGroupMembers = []
   },
@@ -638,21 +728,13 @@ const mutations = {
         group_hash VARCHAR(32) NOT NULL,
         address VARCHAR(35) NOT NULL,
         joined_at INTEGER,
-        PRIMARY KEY (group_hash, address)
-        )`, err => {
-        if (err) {
-          console.log(err)
-        }
-      })
 
-      state.DB.run(`CREATE TABLE IF NOT EXISTS GROUP_ECDHS(
-        group_hash VARCHAR(32) NOT NULL,
-        address VARCHAR(35) NOT NULL,
         aes_key TEXT,
         private_key TEXT,
         public_key TEXT,
         self_json TEXT,
         pair_json TEXT,
+
         PRIMARY KEY (group_hash, address)
         )`, err => {
         if (err) {
@@ -666,7 +748,7 @@ const mutations = {
         sour_address VARCHAR(35),
         sequence INTEGER,
         pre_hash VARCHAR(32) NOT NULL,
-        confirm VARCHAR(32) NOT NULL,
+        confirm_hash VARCHAR(32) NOT NULL,
         content TEXT,
         timestamp INTEGER,
         created_at INTEGER,
@@ -733,6 +815,7 @@ const mutations = {
           state.GroupSessions.push({ "address": item.group_address, "hash": item.group_hash, "name": item.group_name, "membership": item.membership, "timestamp": item.updated_at })
           state.Groups[item.group_hash] = item.group_name
         }
+
       }
     })
 
@@ -1010,7 +1093,7 @@ const mutations = {
                   console.log(item)
                   bulletin = JSON.parse(item.json)
                 }
-                let strJson = GenObjectResponse(bulletin, address)
+                let strJson = GenObjectResponse(state.ObjectType.Bulletin, bulletin, address)
                 state.WS.send(strJson)
               }
             })
@@ -1018,9 +1101,7 @@ const mutations = {
             let address = oxoKeyPairs.deriveAddress(json.PublicKey)
             let objectJson = json.Object
             console.log(objectJson)
-            if (checkGroupMessageSchema(objectJson)) {
-
-            } else if (checkBulletinSchema(objectJson)) {
+            if (json.ObjectType == state.ObjectType.Bulletin && checkBulletinSchema(objectJson)) {
               let bulletinJson = objectJson
               let address = oxoKeyPairs.deriveAddress(bulletinJson.PublicKey)
               let strJson = JSON.stringify(bulletinJson)
@@ -1068,7 +1149,7 @@ const mutations = {
                   }
                 })
               }
-            } else if (checkGroupManageSchema(objectJson)) {
+            } else if (json.ObjectType == state.ObjectType.GroupManage && checkGroupManageSchema(objectJson)) {
               console.log(`GroupManage`)
               let groupManageJson = objectJson
               let group_address = oxoKeyPairs.deriveAddress(groupManageJson.PublicKey)
@@ -1105,6 +1186,8 @@ const mutations = {
                           state.DB.run(SQL, err => {
                             if (err) {
                               console.log(err)
+                            } else {
+                              GroupHandshake(groupManageJson.GroupHash, group_address)
                             }
                           })
                         }
@@ -1136,10 +1219,13 @@ const mutations = {
                                 if (err) {
                                   console.log(err)
                                 } else {
+                                  GroupHandshake(groupManageJson.GroupHash, request_address)
+
                                   if (groupManageJson.GroupHash == state.CurrentGroupSession) {
                                     //update current member
                                     state.CurrenrGroupMembers.push({ 'address': request_address, 'joined_at': groupManageJson.Timestamp })
                                   }
+
                                   if (request_address == state.Address) {
                                     //my request
                                     SQL = `UPDATE GROUPS SET membership = '${state.GroupMemberShip.Member}', updated_at = ${groupManageJson.Timestamp} WHERE group_address = '${group_address}' AND group_hash = '${groupManageJson.GroupHash}'`
@@ -1240,6 +1326,12 @@ const mutations = {
                   }
                 })
               }
+            } else if (json.ObjectType == state.ObjectType.GroupMessage) {
+              //get address aeskey
+              //decrypt
+              let group_hash = objectJson.GroupHash
+              let msg = objectJson.GroupMessage
+              //checkGroupMessageSchema(objectJson)
             }
           } else if (json.Action == state.ActionCode.GroupRequest) {
             console.log(`GroupRequest`)
@@ -1384,10 +1476,108 @@ const mutations = {
                 for (const item of items) {
                   DelayExec(s * MessageInterval).then(() => {
                     let group_manage = JSON.parse(item.json)
-                    let strJson = GenObjectResponse(group_manage, address)
+                    let strJson = GenObjectResponse(state.ObjectType.GroupManage, group_manage, address)
                     state.WS.send(strJson)
                   })
                   s = s + 1
+                }
+              }
+            })
+          } else if (json.Action == state.ActionCode.GroupDH) {
+            let address = oxoKeyPairs.deriveAddress(json.PublicKey)
+            let SQL = `SELECT * FROM GROUP_MEMBERS WHERE group_hash = "${json.GroupHash}" AND address = '${address}'`
+            state.DB.get(SQL, (err, item) => {
+              if (err) {
+                console.log(err)
+              } else {
+                if (item == null) {
+                  //new member i don't know
+                  SyncGroupManage(json.GroupHash, address)
+                } else {
+                  let timestamp = Date.now()
+                  if (item.self_json == null) {
+                    //self not ready, so pair could not be ready
+                    //gen my-sk-pk and aes-key
+                    let ecdh = crypto.createECDH('secp256k1')
+                    let ecdh_pk = ecdh.generateKeys('hex')
+                    let ecdh_sk = ecdh.getPrivateKey('hex')
+                    let aesKey = ecdh.computeSecret(json.DHPublicKey, 'hex', 'hex')
+
+                    //gen message with my-pk, indicate self ready
+                    let selfJson = {
+                      "Action": state.ActionCode.GroupDH,
+                      "GroupHash": json.GroupHash,
+                      "DHPublicKey": ecdh_pk,
+                      "Pair": json.DHPublicKey,
+                      "To": address,
+                      "Timestamp": timestamp,
+                      "PublicKey": state.PublicKey
+                    }
+                    let sig = sign(JSON.stringify(selfJson), state.PrivateKey)
+                    selfJson.Signature = sig
+                    let strSelfJson = JSON.stringify(selfJson)
+                    console.log(strSelfJson)
+
+                    //save my-sk-pk, pair-pk, aes-key, self-not-ready-json
+                    SQL = `UPDATE GROUP_MEMBERS SET private_key = '${ecdh_sk}', public_key = '${json.DHPublicKey}', aes_key = '${aesKey}', self_json = '${strSelfJson}' WHERE group_hash = "${json.GroupHash}" AND address = '${address}'`
+
+                    state.DB.run(SQL, err => {
+                      if (err) {
+                        console.log(err)
+                      } else {
+                        state.WS.send(strSelfJson)
+                        //wait for pair to declare ready
+                      }
+                    })
+                  } else if (item.pair_json == null) {
+                    //item not null => my-sk-pk, self-not-ready-json is exist
+                    //gen aes
+                    let ecdh = crypto.createECDH('secp256k1')
+                    ecdh.setPrivateKey(item.private_key, 'hex')
+                    let ecdh_pk = ecdh.getPublicKey('hex')
+                    let aesKey = ecdh.computeSecret(json.DHPublicKey, 'hex', 'hex')
+
+                    //gen self-ready-json
+                    let selfJson = {
+                      "Action": state.ActionCode.GroupDH,
+                      "GroupHash": json.GroupHash,
+                      "DHPublicKey": ecdh_pk,
+                      "Pair": json.DHPublicKey,
+                      "To": address,
+                      "Timestamp": timestamp,
+                      "PublicKey": state.PublicKey
+                    }
+                    let sig = sign(JSON.stringify(selfJson), state.PrivateKey)
+                    selfJson.Signature = sig
+                    let strSelfJson = JSON.stringify(selfJson)
+                    console.log(strSelfJson)
+
+                    if (json.Pair == "") {
+                      //pair not ready
+                      //save pair-pk, aes-key, self-ready-json
+                      SQL = `UPDATE GROUP_MEMBERS SET public_key = '${json.DHPublicKey}', aes_key = '${aesKey}', self_json = '${strSelfJson}' WHERE group_hash = "${json.GroupHash}" AND address = '${address}'`
+                      state.DB.run(SQL, err => {
+                        if (err) {
+                          console.log(err)
+                        } else {
+                          state.WS.send(strSelfJson)
+                        }
+                      })
+                    } else {
+                      //pair ready
+                      //save pair-pk, aes-key, self-ready-json, pair-ready-json
+                      SQL = `UPDATE GROUP_MEMBERS SET public_key = '${json.DHPublicKey}', aes_key = '${aesKey}', self_json = '${strSelfJson}', pair_json = '${JSON.stringify(json)}' WHERE group_hash = "${json.GroupHash}" AND address = '${address}'`
+                      state.DB.run(SQL, err => {
+                        if (err) {
+                          console.log(err)
+                        } else {
+                          state.WS.send(strSelfJson)
+                        }
+                      })
+                    }
+                  }
+                  //else: self and pair are ready, do nothing
+                  //both ready to talk
                 }
               }
             })
@@ -1815,16 +2005,7 @@ const mutations = {
                     if (err) {
                       console.log(err)
                     } else {
-                      let response = {
-                        "Action": state.ActionCode.ObjectResponse,
-                        "Object": json,
-                        "To": address,
-                        "Timestamp": Date.now(),
-                        "PublicKey": state.PublicKey,
-                      }
-                      let responseSig = sign(JSON.stringify(response), state.PrivateKey)
-                      response.Signature = responseSig
-                      let strResponse = JSON.stringify(response)
+                      let strResponse = GenObjectResponse(state.ObjectType.GroupManage, json, address)
                       state.WS.send(strResponse)
                       console.log(strResponse)
 
@@ -1933,6 +2114,8 @@ const mutations = {
                     if (err) {
                       console.log(err)
                     } else {
+                      Broadcast2Group(state.ObjectType.GroupManage, group_hash, json)
+
                       SQL = `DELETE FROM GROUP_MEMBERS WHERE group_hash = '${group_hash}' AND address = '${member_address}'`
                       state.DB.run(SQL, err => {
                         if (err) {
@@ -1961,6 +2144,41 @@ const mutations = {
         }
       })
     }
+  },
+  SwitchGroupSession(state, payload) {
+    let group_hash = payload
+    state.CurrentGroupSession = group_hash
+
+    state.GroupMessages = []
+    // mark current session's pair_message(in) as read
+    let SQL = `UPDATE GROUP_MESSAGES SET readed = true WHERE group_hash = '${group_hash}'`
+    state.DB.run(SQL, err => {
+      if (err) {
+        console.log(err)
+      } else {
+        for (let i = state.GroupSessions.length - 1; i >= 0; i--) {
+          if (state.GroupSessions[i].hash == group_hash) {
+            state.GroupSessions[i].unread_count = 0
+            break
+          }
+        }
+      }
+    })
+
+    //get pre_message(out) squenece and hash
+    state.CurrentGroupMessageSequence = 0
+    state.CurrentGroupMessageHash = GenesisHash
+    SQL = `SELECT * FROM GROUP_MESSAGES WHERE sour_address = "${state.Address}" AND group_hash = '${group_hash}' ORDER BY sequence DESC`
+    state.DB.get(SQL, (err, item) => {
+      if (err) {
+        console.log(err)
+      } else {
+        if (item != null) {
+          state.CurrentGroupMessageSequence = item.sequence
+          state.CurrentGroupMessageHash = item.hash
+        }
+      }
+    })
   }
 }
 
@@ -2090,8 +2308,8 @@ const actions = {
         let hash = halfSHA512(strJson)
 
         //save message
-        SQL = `INSERT INTO MESSAGES (dest_address, sequence, pre_hash, content, timestamp, json, created_at, hash)
-          VALUES ('${payload.address}', ${state.CurrentMessageSequence + 1}, '${state.CurrentMessageHash}', '${payload.content}', '${payload.timestamp}', '${strJson}', '${payload.timestamp}', '${hash}')`
+        SQL = `INSERT INTO MESSAGES (dest_address, sequence, pre_hash, content, timestamp, json, created_at, readed, hash)
+          VALUES ('${payload.address}', ${state.CurrentMessageSequence + 1}, '${state.CurrentMessageHash}', '${payload.content}', '${payload.timestamp}', '${strJson}', '${payload.timestamp}', true, '${hash}')`
 
         state.DB.run(SQL, err => {
           if (err) {
@@ -2171,6 +2389,62 @@ const actions = {
         state.Bulletins.unshift({ "address": state.Address, "name": SelfName, "timestamp": timestamp, "created_at": timestamp, 'sequence': state.CurrentBulletinSequence + 1, "content": payload.content, 'hash': hash, 'quote_size': tmpQuotes.length })
         state.CurrentBulletinSequence += 1
         state.CurrentBulletinHash = hash
+      }
+    })
+  },
+  //group
+  LoadGroups({ commit }, payload) {
+    for (let i = state.GroupSessions.length - 1; i >= 0; i--) {
+      if (state.GroupSessions[i].hash == payload.group_hash) {
+        commit('SwitchGroupSession', payload.group_hash)
+      }
+    }
+  },
+  DeliverGroupMessage({ commit }, payload) {
+    let group_hash = payload.group_hash
+    //get pair message not confirmed
+    let SQL = `SELECT * FROM GROUP_MESSAGES WHERE group_hash = '${state.CurrentGroupSession}' AND sour_address != '${state.Address}' ORDER BY created_at DESC`
+    state.DB.get(SQL, (err, item) => {
+      if (err) {
+        console.log(err)
+      } else {
+        let confirm_hash = ''
+        if (item != null) {
+          confirm_hash = item.hash
+        }
+
+        let json = {
+          "Action": state.ActionCode.GroupMessage,
+          "GroupHash": group_hash,
+          "Sequence": state.CurrentGroupMessageSequence + 1,
+          "PreHash": state.CurrentGroupMessageHash,
+          "ConfirmHash": confirm_hash,
+          "Content": payload.content,
+          "Timestamp": payload.timestamp,
+          "PublicKey": state.PublicKey
+        }
+        let sig = sign(JSON.stringify(json), state.PrivateKey)
+        json.Signature = sig
+        //console.log(json)
+        let strJson = JSON.stringify(json)
+        let hash = halfSHA512(strJson)
+
+        //save message
+        SQL = `INSERT INTO GROUP_MESSAGES (group_hash, sour_address, sequence, pre_hash, confirm_hash, content, timestamp, json, created_at, hash)
+          VALUES ('${group_hash}', '${state.Address}', ${state.CurrentGroupMessageSequence + 1}, '${state.CurrentGroupMessageHash}', '${confirm_hash}', '${payload.content}', '${payload.timestamp}', '${strJson}', '${payload.timestamp}', '${hash}')`
+
+        state.DB.run(SQL, err => {
+          if (err) {
+            console.log(err)
+          } else {
+            state.CurrentGroupMessageSequence += 1
+            state.CurrentGroupMessageHash = hash
+
+            state.GroupMessages.push({ "name": SelfName, "timestamp": payload.timestamp, "created_at": payload.timestamp, 'sequence': state.CurrentGroupMessageSequence, "content": payload.content, 'hash': hash })
+
+            Broadcast2Group(state.ObjectType.GroupMessage, group_hash, strJson)
+          }
+        })
       }
     })
   }
@@ -2285,6 +2559,10 @@ const getters = {
   },
   displayQuotes: (state) => {
     return state.DisplayQuotes
+  },
+  //group
+  currentGroupSession: (state) => {
+    return state.CurrentGroupSession
   }
 }
 
