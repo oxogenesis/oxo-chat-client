@@ -14,7 +14,8 @@
     群组：<br>
     <ul>
       <li v-for="group in this.$store.state.OXO.GroupSessions">
-        <router-link :to="{name:'GroupMember', params:{group_hash:group.hash}}">{{group.name}}</router-link>(
+        <router-link :to="{name:'Groups', params:{group_hash:group.hash}}">{{group.name}}</router-link>
+        (
         <span v-if="group.membership == 0">申请中</span>
         <span v-if="group.membership == 1">创始人</span>
         <span v-if="group.membership == 2">已加入</span>
@@ -25,6 +26,7 @@
         <input v-if="group.membership == 2" type="button" value="申请退出" @click="reRequest(0, group.address, group.hash, group.name)" />
         <br>
         群号:{{group.hash}}
+        <router-link :to="{name:'GroupMember', params:{group_hash:group.hash}}">成员列表</router-link>
       </li>
     </ul>
     <br>
