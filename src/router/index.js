@@ -80,7 +80,7 @@ export default new Router({
       component: require('@/components/Groups').default
     },
     {
-      path: '/Groups/:hash',
+      path: '/Groups/:group_hash',
       name: 'Groups',
       component: require('@/components/Groups').default
     },
