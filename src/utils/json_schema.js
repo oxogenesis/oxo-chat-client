@@ -362,7 +362,7 @@ let GroupDHSchema = {
 
 let GroupMessageSchema = {
   "type": "object",
-  "required": ["Action", "GroupHash", "Sequence", "PreHash", "ConfirmHash", "Content", "Timestamp", "PublicKey", "Signature"],
+  "required": ["Action", "GroupHash", "Sequence", "PreHash", "Content", "Timestamp", "PublicKey", "Signature"],
   "maxProperties": 9,
   "properties": {
     "Action": {
@@ -377,8 +377,14 @@ let GroupMessageSchema = {
     "PreHash": {
       "type": "string"
     },
-    "ConfirmHash": {
-      "type": "string"
+    "Confirm": {
+      "type": "object",
+      "required": ["Address", "Sequence", "Hash"],
+      "properties": {
+        "Address": { "type": "string" },
+        "Sequence": { "type": "number" },
+        "Hash": { "type": "string" }
+      }
     },
     "Content": {
       "type": "string"
@@ -397,8 +403,8 @@ let GroupMessageSchema = {
 
 let GroupMessageSyncSchema = {
   "type": "object",
-  "required": ["Action", "GroupHash", "MessageHash", "To", "Timestamp", "PublicKey", "Signature"],
-  "maxProperties": 7,
+  "required": ["Action", "GroupHash", "Address", "CurrentSequence", "To", "Timestamp", "PublicKey", "Signature"],
+  "maxProperties": 8,
   "properties": {
     "Action": {
       "type": "number"
@@ -406,8 +412,11 @@ let GroupMessageSyncSchema = {
     "GroupHash": {
       "type": "string"
     },
-    "MessageHash": {
+    "Address": {
       "type": "string"
+    },
+    "CurrentSequence": {
+      "type": "number"
     },
     "To": {
       "type": "string"
