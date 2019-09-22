@@ -1,8 +1,8 @@
 <template>
   <div class="message-section">
-    <h3 class="message-session-heading">{{ getNameByAddress(currentChatSession) }}</h3>
+    <h3 class="message-session-heading">{{ currentGroupSession }}</h3>
     <ul class="message-list" ref="list">
-      <message v-for="message in getMessages" :message="message">
+      <group-message v-for="message in getGroupMessages" :message="message">
       </message>
     </ul>
     <textarea class="message-composer" v-model="content"></textarea>
@@ -10,12 +10,12 @@
   </div>
 </template>
 <script>
-import Message from './Message.vue'
+import GroupMessage from './GroupMessage.vue'
 import { mapActions, mapGetters } from 'vuex'
 
 export default {
-  name: 'MessageSection',
-  components: { Message },
+  name: 'GroupMessageSection',
+  components: { GroupMessage },
   data() {
     return {
       content: '',

@@ -8,6 +8,7 @@
   </li>
 </template>
 <script>
+
 export default {
   name: 'Message',
   props: {
