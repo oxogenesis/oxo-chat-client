@@ -279,7 +279,6 @@ function GenGroupMessage(msg_json, aes_key, to) {
 
   delete tmp_json["ActionCode"]
   delete tmp_json["GroupHash"]
-  delete tmp_json["PublicKey"]
 
   let msg = encrypt(key, iv, JSON.stringify(tmp_json))
 
@@ -1398,115 +1397,127 @@ const mutations = {
             } else if (json.ObjectType == state.ObjectType.GroupMessage) {
               //get address aeskey
               let group_hash = objectJson.GroupHash
-              let msgAddress = oxoKeyPairs.deriveAddress(objectJson.PublicKey)
 
+              //sender is a group member
               let SQL = `SELECT * FROM GROUP_MEMBERS WHERE group_hash = '${group_hash}' AND address = '${address}'`
-              state.DB.get(SQL, (err, item) => {
+              state.DB.get(SQL, (err, sender) => {
                 if (err) {
                   console.log(err)
                 } else {
-                  if (item != null && item.aes_key != null) {
+                  if (sender != null && sender.aes_key != null) {
                     //decrypt
-                    let key = item.aes_key.slice(0, 32)
-                    let iv = item.aes_key.slice(32, 48)
+                    let key = sender.aes_key.slice(0, 32)
+                    let iv = sender.aes_key.slice(32, 48)
                     let content = decrypt(key, iv, objectJson.Message)
                     let jsonTmp = JSON.parse(content)
-                    let jsonAssemble = null
-                    if (jsonTmp.Confirm != null) {
-                      jsonAssemble = {
-                        "Action": state.ActionCode.GroupMessage,
-                        "GroupHash": objectJson.GroupHash,
-                        "Sequence": jsonTmp.Sequence,
-                        "PreHash": jsonTmp.PreHash,
-                        "Confirm": jsonTmp.Confirm,
-                        "Content": jsonTmp.Content,
-                        "Timestamp": jsonTmp.Timestamp,
-                        "PublicKey": objectJson.PublicKey,
-                        "Signature": jsonTmp.Signature
-                      }
-                    } else {
-                      jsonAssemble = {
-                        "Action": state.ActionCode.GroupMessage,
-                        "GroupHash": objectJson.GroupHash,
-                        "Sequence": jsonTmp.Sequence,
-                        "PreHash": jsonTmp.PreHash,
-                        "Content": jsonTmp.Content,
-                        "Timestamp": jsonTmp.Timestamp,
-                        "PublicKey": objectJson.PublicKey,
-                        "Signature": jsonTmp.Signature
-                      }
-                    }
 
-                    let strJson = JSON.stringify(jsonAssemble)
-                    let hash = halfSHA512(strJson)
-                    let timestamp = Date.now()
+                    let msgAddress = oxoKeyPairs.deriveAddress(jsonTmp.PublicKey)
 
-                    console.log(jsonAssemble)
-                    if (checkGroupMessageSchema(jsonAssemble)) {
-                      if (VerifyJsonSignature(jsonAssemble) == false) {
-                        console.log(`VerifyJsonSignature`)
-                        return
+                    //message is from a group member
+                    let SQL = `SELECT * FROM GROUP_MEMBERS WHERE group_hash = '${group_hash}' AND address = '${msgAddress}'`
+                    state.DB.get(SQL, (err, messager) => {
+                      if (err) {
+                        console.log(err)
                       } else {
-                        SQL = `SELECT * FROM GROUP_MESSAGES WHERE group_hash = '${objectJson.GroupHash}' AND sour_address = '${msgAddress}' ORDER BY sequence DESC`
-                        state.DB.get(SQL, (err, item) => {
-                          if (err) {
-                            console.log(err)
-                          } else {
-                            if (item == null) {
-                              if (jsonTmp.Sequence != 1) {
-                                //sync
-                                SyncGroupMessage(objectJson.GroupHash, msgAddress, 0, address)
-                                return
-                              }
-                            } else if (jsonTmp.Sequence != item.sequence + 1 || jsonTmp.PreHash != item.hash) {
-                              // not match pre msg, drop, sync
-                              SyncGroupMessage(objectJson.GroupHash, msgAddress, item.sequence, address)
-                              return
+                        if (messager != null) {
+                          let jsonAssemble = null
+                          if (jsonTmp.Confirm != null) {
+                            jsonAssemble = {
+                              "Action": state.ActionCode.GroupMessage,
+                              "GroupHash": objectJson.GroupHash,
+                              "Sequence": jsonTmp.Sequence,
+                              "PreHash": jsonTmp.PreHash,
+                              "Confirm": jsonTmp.Confirm,
+                              "Content": jsonTmp.Content,
+                              "Timestamp": jsonTmp.Timestamp,
+                              "PublicKey": jsonTmp.PublicKey,
+                              "Signature": jsonTmp.Signature
                             }
+                          } else {
+                            jsonAssemble = {
+                              "Action": state.ActionCode.GroupMessage,
+                              "GroupHash": objectJson.GroupHash,
+                              "Sequence": jsonTmp.Sequence,
+                              "PreHash": jsonTmp.PreHash,
+                              "Content": jsonTmp.Content,
+                              "Timestamp": jsonTmp.Timestamp,
+                              "PublicKey": jsonTmp.PublicKey,
+                              "Signature": jsonTmp.Signature
+                            }
+                          }
+                          let strJson = JSON.stringify(jsonAssemble)
+                          let hash = halfSHA512(strJson)
+                          let timestamp = Date.now()
 
-                            SQL = `INSERT INTO GROUP_MESSAGES (group_hash, sour_address, sequence, pre_hash, content, timestamp, json, created_at, hash)
-                              VALUES ('${group_hash}', '${msgAddress}', ${jsonTmp.Sequence}, '${jsonTmp.PreHash}', '${jsonTmp.Content}', '${jsonTmp.Timestamp}', '${strJson}', '${timestamp}', '${hash}')`
+                          console.log(jsonAssemble)
+                          if (checkGroupMessageSchema(jsonAssemble)) {
+                            if (VerifyJsonSignature(jsonAssemble) == false) {
+                              console.log(`VerifyJsonSignature`)
+                              return
+                            } else {
+                              SQL = `SELECT * FROM GROUP_MESSAGES WHERE group_hash = '${objectJson.GroupHash}' AND sour_address = '${msgAddress}' ORDER BY sequence DESC`
+                              state.DB.get(SQL, (err, item) => {
+                                if (err) {
+                                  console.log(err)
+                                } else {
+                                  if (item == null) {
+                                    if (jsonTmp.Sequence != 1) {
+                                      //sync
+                                      SyncGroupMessage(objectJson.GroupHash, msgAddress, 0, address)
+                                      return
+                                    }
+                                  } else if (jsonTmp.Sequence != item.sequence + 1 || jsonTmp.PreHash != item.hash) {
+                                    // not match pre msg, drop, sync
+                                    SyncGroupMessage(objectJson.GroupHash, msgAddress, item.sequence, address)
+                                    return
+                                  }
 
-                            state.DB.run(SQL, err => {
-                              if (err) {
-                                console.log(err)
-                              } else {
-                                //update current group message
-                                if (state.CurrentGroupSession == group_hash) {
-                                  state.GroupMessages.push({ "address": msgAddress, "timestamp": jsonTmp.Timestamp, "created_at": timestamp, 'sequence': jsonTmp.Sequence, "content": jsonTmp.Content, 'hash': hash })
-                                }
-                                //sync
-                                if (jsonTmp.Confirm != null) {
-                                  SQL = `SELECT * FROM GROUP_MESSAGES WHERE hash = '${jsonTmp.Confirm.Hash}'`
-                                  state.DB.get(SQL, (err, item) => {
+                                  SQL = `INSERT INTO GROUP_MESSAGES (group_hash, sour_address, sequence, pre_hash, content, timestamp, json, created_at, hash)
+                                    VALUES ('${group_hash}', '${msgAddress}', ${jsonTmp.Sequence}, '${jsonTmp.PreHash}', '${jsonTmp.Content}', '${jsonTmp.Timestamp}', '${strJson}', '${timestamp}', '${hash}')`
+
+                                  state.DB.run(SQL, err => {
                                     if (err) {
                                       console.log(err)
                                     } else {
-                                      if (item == null) {
-                                        //missing confirm group_message
-                                        SQL = `SELECT * FROM GROUP_MESSAGES WHERE group_hash = '${group_hash}' AND sour_address = '${jsonTmp.Confirm.Address}' ORDER BY sequence DESC`
+                                      //update current group message
+                                      if (state.CurrentGroupSession == group_hash) {
+                                        state.GroupMessages.push({ "address": msgAddress, "timestamp": jsonTmp.Timestamp, "created_at": timestamp, 'sequence': jsonTmp.Sequence, "content": jsonTmp.Content, 'hash': hash })
+                                      }
+                                      //sync
+                                      if (jsonTmp.Confirm != null) {
+                                        SQL = `SELECT * FROM GROUP_MESSAGES WHERE hash = '${jsonTmp.Confirm.Hash}'`
                                         state.DB.get(SQL, (err, item) => {
                                           if (err) {
                                             console.log(err)
                                           } else {
-                                            //fetch confirm single-chain
-                                            let seq = 0
-                                            if (item != null) {
-                                              seq = item.sequence
+                                            if (item == null) {
+                                              //missing confirm group_message
+                                              SQL = `SELECT * FROM GROUP_MESSAGES WHERE group_hash = '${group_hash}' AND sour_address = '${jsonTmp.Confirm.Address}' ORDER BY sequence DESC`
+                                              state.DB.get(SQL, (err, item) => {
+                                                if (err) {
+                                                  console.log(err)
+                                                } else {
+                                                  //fetch confirm single-chain
+                                                  let seq = 0
+                                                  if (item != null) {
+                                                    seq = item.sequence
+                                                  }
+                                                  SyncGroupMessage(group_hash, jsonTmp.Confirm.Address, seq, address)
+                                                }
+                                              })
                                             }
-                                            SyncGroupMessage(group_hash, jsonTmp.Confirm.Address, seq, address)
                                           }
                                         })
                                       }
                                     }
                                   })
                                 }
-                              }
-                            })
+                              })
+                            }
                           }
-                        })
+                        }
                       }
-                    }
+                    })
                   }
                 }
               })
@@ -1928,7 +1939,6 @@ const mutations = {
       if (err) {
         console.log(err)
       } else {
-        //console.log(items)
         for (const item of items) {
           let name = SelfName
           if (item.sour_address != null) {
@@ -2384,6 +2394,22 @@ const mutations = {
     })
 
     GroupHandshake(group_hash)
+  },
+  LoadMoreGroupMessage(state) {
+    let firstMessage = state.GroupMessages[0]
+    if (firstMessage == null) {
+      return
+    }
+    let SQL = `SELECT * FROM GROUP_MESSAGES WHERE group_hash = '${state.CurrentGroupSession}' AND created_at < ${firstMessage.created_at} ORDER BY created_at DESC LIMIT 20`
+    state.DB.all(SQL, (err, items) => {
+      if (err) {
+        console.log(err)
+      } else {
+        for (const item of items) {
+          state.GroupMessages.unshift({ "address": item.sour_address, "timestamp": item.timestamp, "created_at": item.created_at, 'sequence': item.sequence, "content": item.content, 'hash': item.hash })
+        }
+      }
+    })
   }
 }
 
