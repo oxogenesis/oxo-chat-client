@@ -8,7 +8,7 @@
 谢谢！  
 
 本项目纯粹是个人兴趣。  
-后续可能还会进行扩展：局域网内数据同步功能，数据中继远程系统互联机制，群主主控模式的点对点群聊（这个已经有思路了），消息内容格式扩展等。
+后续可能还会进行扩展：局域网内数据同步功能，数据中继远程系统互联机制，本地系统同时连接多个远程中继，消息内容格式扩展等。
 
 后续还有其他项目计划，需要c++11相关人才，苟富贵，定不相忘！  
 **namespacegenesis@gmail.com**
@@ -20,6 +20,9 @@
 
 # release
 **[download page](https://github.com/oxogenesis/oxo-chat-client/releases)**  
+
+**v0.0.2 群聊**（群主主控模式的点对点群聊）  
+**v0.0.1 公告、私聊**
 
 # wiki
 **[1.关于密码学](https://github.com/oxogenesis/oxo-chat-client/wiki/1.%E5%85%B3%E4%BA%8E%E5%AF%86%E7%A0%81%E5%AD%A6)**  
