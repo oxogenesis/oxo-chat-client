@@ -4,7 +4,7 @@
       引用：<span @click="clearQuotes()">(清空)</span><br>
       <ul>
         <li v-for="quote in getQuotes">
-          {{ quote.Name ? quote.Name : quote.Address}}#{{quote.Sequence}} <span @click="removeQuote(quote.Hash)">(X)</span>
+          {{ getNameByAddress(quote.Address)}}#{{quote.Sequence}} <span @click="removeQuote(quote.Hash)">(X)</span>
         </li>
       </ul>
     </div>

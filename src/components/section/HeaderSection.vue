@@ -22,8 +22,17 @@ export default {
   },
   computed: {
     ...mapGetters({
-      getWSState: 'getWSState'
+      getWSState: 'getWSState',
+      getPopUp: 'getPopUp'
     })
+  },
+  watch: {
+    'getPopUp': function() {
+      if (this.$store.state.OXO.PopUp != '') {
+        alert(this.$store.state.OXO.PopUp)
+        this.$store.state.OXO.PopUp = ''
+      }
+    }
   }
 }
 

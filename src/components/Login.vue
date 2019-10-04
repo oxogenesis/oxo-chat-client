@@ -3,7 +3,7 @@
     <router-link to="/">首页</router-link><br>
     种子文件: <input type="button" value="浏览" @click="importSeed()" /><span id="seed_path"></span><br>
     口令: <input type="password" name="password" id="input_password" /><br>
-    <input type="button" value="登录" @click="login()" /><br>
+    <input type="button" value="解锁账号" @click="login()" /><br>
   </div>
 </template>
 <script>
@@ -19,16 +19,19 @@ export default {
       dialog.showOpenDialog({
         title: "浏览种子文件"
       }, filename => {
-        fs.readFile(filename[0], 'utf8', function(err, data) {
-          if (err) {
-            document.querySelector('#seed_path').innerHTML = ""
-            alert("文件不存在...")
-          } else {
-            document.querySelector('#seed_path').innerHTML = filename[0]
-            seedfile = data.toString()
-            console.log(seedfile)
-          }
-        })
+        try {
+          fs.readFile(filename[0], 'utf8', function(err, data) {
+            if (err) {
+              document.querySelector('#seed_path').innerHTML = ""
+              alert("文件不存在...")
+            } else {
+              document.querySelector('#seed_path').innerHTML = filename[0]
+              seedfile = data.toString()
+            }
+          })
+        } catch (e) {
+          console.log(e)
+        }
       })
     },
     login() {
@@ -39,12 +42,11 @@ export default {
         let result = this.oxo_api.decrypt(key, json["iv"], json["ct"])
         json = JSON.parse(result)
         if (json != null) {
-          console.log(json["seed"])
           this.$store.commit('InitAccount', json["seed"])
           this.$router.push('/Home')
         }
       } catch (e) {
-        alert("种子或口令不正确...")
+        alert("<种子无效>或<口令错误>...")
       }
     }
   }

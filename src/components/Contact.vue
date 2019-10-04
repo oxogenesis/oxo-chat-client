@@ -8,9 +8,11 @@
     <input type="button" value="修改" @click="renameContact()" /><br>
     备注账号：<br>
     <ul>
-      <li v-for="contact in this.$store.state.OXO.ContactsArray">{{contact.name}}({{contact.address}})
-        <input type="button" value="加为好友" @click="addFriend(contact.address)" />
-        <input type="button" value="加为关注" @click="addFollow(contact.address)" />
+      <li v-for="contact in getContacts">
+        {{contact.name}}({{contact.address}})<br>
+        @{{contact.updated_at | time}}
+        <input v-if="contact.address != getAddress" type="button" value="加为好友" @click="addFriend(contact.address)" />
+        <input v-if="contact.address != getAddress" type="button" value="加为关注" @click="addFollow(contact.address)" />
         <input type="button" value="删除" @click="removeContact(contact.address)" />
       </li>
     </ul>
@@ -46,7 +48,9 @@ export default {
   },
   computed: {
     ...mapGetters({
-      getNameByAddress: 'getNameByAddress'
+      getNameByAddress: 'getNameByAddress',
+      getContacts: 'getContacts',
+      getAddress: 'getAddress'
     })
   },
   methods: {
@@ -55,9 +59,6 @@ export default {
       let name = document.querySelector('input#input_name').value
       if (address == "" || name == "") {
         alert("账号和备注名均不能为空...")
-        return
-      } else if (address == this.address) {
-        alert("不支持将自己作为联系人...")
         return
       } else {
         this.$store.commit({
@@ -73,9 +74,6 @@ export default {
       if (address == "" || name == "") {
         alert("账号和备注名均不能为空...")
         return
-      } else if (address == this.address) {
-        alert("不支持将自己作为联系人...")
-        return
       } else {
         this.$store.commit({
           type: 'RenameContact',
@@ -85,13 +83,10 @@ export default {
       }
     },
     removeContact(address) {
-      let result = this.$store.commit({
+      this.$store.commit({
         type: 'RemoveContact',
         address: address
       })
-      if (result == false) {
-        alert("删除联系人，需先解除好友和关注")
-      }
     },
     ...mapMutations({
       addFriend: 'AddFriend',

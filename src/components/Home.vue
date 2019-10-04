@@ -18,10 +18,9 @@ export default {
     HeaderSection
   },
   created() {
-    console.log(`Init:${this.$store.state.OXO.Init}`)
     if(this.$store.state.OXO.Init == true) {
-      this.$store.dispatch('InitDB', this.address)
-      this.$store.dispatch('ToConn')
+      this.$store.dispatch('Loading', this.address)
+      this.$store.dispatch('KeepConn')
       this.$store.state.OXO.Init = false
     }
   },
