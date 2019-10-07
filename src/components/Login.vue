@@ -36,7 +36,7 @@ export default {
     },
     login() {
       try {
-        let password = document.querySelector('input#input_password').value
+        let password = document.querySelector('input#input_password').value.trim()
         let json = JSON.parse(seedfile)
         let key = this.oxo_api.halfSHA512(json["salt"] + password).toString('hex').slice(0, 32)
         let result = this.oxo_api.decrypt(key, json["iv"], json["ct"])

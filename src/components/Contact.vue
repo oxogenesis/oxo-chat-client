@@ -26,7 +26,7 @@
     好友：<br>
     <ul>
       <li v-for="friend in this.$store.state.OXO.Friends">
-        <router-link :to="{name:'Chats',params:{address:friend}}">{{getNameByAddress(friend)}}</router-link>
+        <router-link :to="{name:'Sessions',params:{session:friend}}">{{getNameByAddress(friend)}}</router-link>
         <input type="button" value="删除" @click="removeFriend(friend)" />
       </li>
     </ul>
@@ -55,7 +55,7 @@ export default {
   },
   methods: {
     addContact() {
-      let address = document.querySelector('input#input_address').value
+      let address = document.querySelector('input#input_address').value.trim()
       let name = document.querySelector('input#input_name').value
       if (address == "" || name == "") {
         alert("账号和备注名均不能为空...")
@@ -69,7 +69,7 @@ export default {
       }
     },
     renameContact() {
-      let address = document.querySelector('input#input_address').value
+      let address = document.querySelector('input#input_address').value.trim()
       let name = document.querySelector('input#input_name').value
       if (address == "" || name == "") {
         alert("账号和备注名均不能为空...")
@@ -82,13 +82,8 @@ export default {
         })
       }
     },
-    removeContact(address) {
-      this.$store.commit({
-        type: 'RemoveContact',
-        address: address
-      })
-    },
     ...mapMutations({
+      removeContact: 'RemoveContact',
       addFriend: 'AddFriend',
       removeFriend: 'RemoveFriend',
       addFollow: 'AddFollow',

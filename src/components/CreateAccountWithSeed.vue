@@ -17,9 +17,9 @@ const crypto = require("crypto")
 export default {
   methods: {
     CreateAccount() {
-      let seed = document.querySelector('input#input_seed').value;
-      let password = document.querySelector('input#input_password').value
-      let confirm = document.querySelector('input#input_confirm').value
+      let seed = document.querySelector('input#input_seed').value.trim()
+      let password = document.querySelector('input#input_password').value.trim()
+      let confirm = document.querySelector('input#input_confirm').value.trim()
       if (password != "") {
         if (password == confirm) {
           try {

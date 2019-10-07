@@ -4,10 +4,10 @@
     <h1>设置</h1>
     <router-link to="/Group">群组</router-link><br>
     <h1>{{this.$store.state.OXO.CurrentGroup.name}}</h1>
-    {{this.$store.state.OXO.CurrentGroup.hash}}<br>
+    {{this.$store.state.OXO.CurrentGroup.session}}<br>
     @{{this.$store.state.OXO.CurrentGroup.timestamp | time}}<br>
     <ul>
-      <li v-for="member in this.$store.state.OXO.CurrenrGroupMembers">
+      <li v-for="member in this.$store.state.OXO.CurrentGroupMembers">
         {{getNameByAddress(member.address)}}
         @{{member.joined_at | time}}
         <input v-if="getCurrentGroupAddress != member.address && getCurrentGroupAddress == getAddress" type="button" value="移除" @click="removeGroupMember(member.address)" />

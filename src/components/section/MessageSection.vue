@@ -1,8 +1,9 @@
 <template>
   <div class="message-section">
-    <h3 class="message-session-heading">{{ getNameByAddress(currentChatSession) }}</h3>
+    <h3 v-if="getCurrentSession[0] == 'o'" class="message-session-heading">{{ getNameByAddress(getCurrentSession) }}</h3>
+    <h3 v-if="getCurrentSession[0] != 'o'" class="message-session-heading">群:{{ this.$store.state.OXO.Groups[getCurrentSession] }}</h3>
     <ul class="message-list" ref="list">
-      <message v-for="message in getMessages" :message="message">
+      <message v-for="message in this.$store.state.OXO.Messages" :message="message">
       </message>
     </ul>
     <textarea class="message-composer" v-model="content"></textarea>
@@ -26,12 +27,11 @@ export default {
   props: {},
   computed: {
     ...mapGetters({
-      getNameByAddress: 'getNameByAddress',
-      currentChatSession: 'currentChatSession',
-      currentChatKeySequence: 'currentChatKeySequence',
       currentChatKey: 'currentChatKey',
+      getNameByAddress: 'getNameByAddress',
       getMessages: 'getMessages',
-      getWSState: 'getWSState'
+      getWSState: 'getWSState',
+      getCurrentSession: 'getCurrentSession'
     })
   },
   created() {},
@@ -44,9 +44,15 @@ export default {
       }
     }, false)
 
-    if (this.$store.state.OXO.CurrentChatKey == '') {
-      this.$refs.btnSend.value = '协商密钥'
+    if (this.$store.state.OXO.CurrentSession[0] == 'o') {
+      //private-chat
+      if (this.$store.state.OXO.CurrentChatKey == '') {
+        this.$refs.btnSend.value = '协商密钥'
+      } else {
+        this.$refs.btnSend.value = '发送'
+      }
     } else {
+      //group-chat
       this.$refs.btnSend.value = '发送'
     }
 
@@ -58,36 +64,53 @@ export default {
   },
   methods: {
     btnSend() {
-      if (this.$refs.btnSend.value == '协商密钥') {
-        this.$store.commit('Handshake', this.$store.state.OXO.CurrentChatSession)
-        alert("如果10秒内无响应，说明对方不在线...")
-      } else if (this.$refs.btnSend.value == '发送') {
+      let timestamp = Date.now()
+      if (this.$store.state.OXO.CurrentSession[0] == 'o') {
+        //private-chat
+        if (this.$refs.btnSend.value == '协商密钥') {
+          this.$store.commit('Handshake', this.$store.state.OXO.CurrentSession)
+          alert("如果10秒内无响应，说明对方不在线...")
+        } else if (this.$refs.btnSend.value == '发送') {
+          if (this.content.trim() == "") {
+            alert("消息不能为空...")
+            return
+          }
+
+          //check handshake
+          let division = this.$store.state.OXO.DefaultDivision
+          let sequence = DHSequence(division, timestamp, this.$store.state.OXO.Address, this.$store.state.OXO.CurrentSession)
+
+          if (sequence != this.$store.state.OXO.CurrentChatKeySequence || this.$store.state.OXO.CurrentChatKey == "") {
+            //如果会话密钥为空
+            //或会话时间区间编号不符
+            //则再次协商会话密钥
+            this.$refs.btnSend.value = '协商密钥'
+            this.$store.commit('Handshake', this.$store.state.OXO.CurrentSession)
+          } else {
+            this.$store.dispatch({
+              type: 'DeliverMessage',
+              timestamp: timestamp,
+              chatKey: this.$store.state.OXO.CurrentChatKey,
+              address: this.$store.state.OXO.CurrentSession,
+              content: this.content
+            })
+            this.content = ''
+          }
+        }
+      } else {
+        //group-chat
         if (this.content.trim() == "") {
           alert("消息不能为空...")
           return
         }
 
-        //check handshake
-        let timestamp = Date.now()
-        let division = this.$store.state.OXO.DefaultDivision
-        let sequence = DHSequence(division, timestamp, this.$store.state.OXO.Address, this.$store.state.OXO.CurrentChatSession)
-
-        if (sequence != this.$store.state.OXO.CurrentChatKeySequence || this.$store.state.OXO.CurrentChatKey == "") {
-          //如果会话密钥为空
-          //或会话时间区间编号不符
-          //则再次协商会话密钥
-          this.$refs.btnSend.value = '协商密钥'
-          this.$store.commit('Handshake', this.$store.state.OXO.CurrentChatSession)
-        } else {
-          this.$store.dispatch({
-            type: 'DeliverMessage',
-            timestamp: timestamp,
-            chatKey: this.$store.state.OXO.CurrentChatKey,
-            address: this.$store.state.OXO.CurrentChatSession,
-            content: this.content
-          })
-          this.content = ''
-        }
+        this.$store.dispatch({
+          type: 'DeliverGroupMessage',
+          timestamp: timestamp,
+          group_hash: this.$store.state.OXO.CurrentSession,
+          content: this.content
+        })
+        this.content = ''
       }
     }
   },
@@ -102,9 +125,18 @@ export default {
         })
       }
     },
+    'getCurrentSession': function() {
+      if (this.$store.state.OXO.CurrentSession[0] == 'o') {
+        if (this.$store.state.OXO.CurrentChatKey == '') {
+          this.$refs.btnSend.value = '协商密钥'
+        } else {
+          this.$refs.btnSend.value = '发送'
+        }
+      } else {
+        this.$refs.btnSend.value = '发送'
+      }
+    },
     'currentChatKey': function() {
-      console.log('this.$store.state.OXO.CurrentChatKey')
-      console.log(this.$store.state.OXO.CurrentChatKey)
       if (this.$store.state.OXO.CurrentChatKey == '') {
         this.$refs.btnSend.value = '协商密钥'
       } else {

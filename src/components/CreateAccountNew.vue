@@ -19,8 +19,8 @@ const crypto = require("crypto")
 export default {
   methods: {
     CreateAccount() {
-      let password = document.querySelector('input#input_password').value
-      let confirm = document.querySelector('input#input_confirm').value
+      let password = document.querySelector('input#input_password').value.trim()
+      let confirm = document.querySelector('input#input_confirm').value.trim()
       if (password != "") {
         if (password == confirm) {
           let seed = oxoKeyPairs.generateSeed(password, 'secp256k1')

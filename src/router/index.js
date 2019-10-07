@@ -65,24 +65,14 @@ export default new Router({
       component: require('@/components/BBs').default
     },
     {
-      path: '/Chats',
-      name: 'Chats',
-      component: require('@/components/Chats').default
+      path: '/Sessions',
+      name: 'Sessions',
+      component: require('@/components/Sessions').default
     },
     {
-      path: '/Chats/:address',
-      name: 'Chats',
-      component: require('@/components/Chats').default
-    },
-    {
-      path: '/Groups',
-      name: 'Groups',
-      component: require('@/components/Groups').default
-    },
-    {
-      path: '/Groups/:group_hash',
-      name: 'Groups',
-      component: require('@/components/Groups').default
+      path: '/Sessions/:session',
+      name: 'Sessions',
+      component: require('@/components/Sessions').default
     },
     {
       path: '/GroupMember/:group_hash',

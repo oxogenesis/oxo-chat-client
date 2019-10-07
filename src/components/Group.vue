@@ -13,8 +13,8 @@
     <br>
     群组：<br>
     <ul>
-      <li v-for="group in this.$store.state.OXO.GroupSessions">
-        <router-link :to="{name:'Groups', params:{group_hash:group.hash}}">{{group.name}}</router-link>
+      <li v-for="group in getGroupSessions">
+        <router-link :to="{name:'Sessions', params:{session:group.session}}">{{group.name}}</router-link>
         (
         <span v-if="group.membership == 0">申请中</span>
         <span v-if="group.membership == 1">创始人</span>
@@ -22,11 +22,11 @@
         <span v-if="group.membership == 3">已退出</span>
         ):
         @{{group.timestamp | time}}
-        <input v-if="group.membership == 0 || group.membership == 3" type="button" value="申请加入" @click="reRequest(1, group.address, group.hash, group.name)" />
-        <input v-if="group.membership == 2" type="button" value="申请退出" @click="reRequest(0, group.address, group.hash, group.name)" />
+        <input v-if="group.membership == 0 || group.membership == 3" type="button" value="申请加入" @click="reRequest(1, group.address, group.session, group.name)" />
+        <input v-if="group.membership == 2" type="button" value="申请退出" @click="reRequest(0, group.address, group.session, group.name)" />
         <br>
-        群号:{{group.hash}}
-        <router-link :to="{name:'GroupMember', params:{group_hash:group.hash}}">成员列表</router-link>
+        群号:{{group.session}}
+        <router-link :to="{name:'GroupMember', params:{group_hash:group.session}}">成员列表</router-link>
       </li>
     </ul>
     <br>
@@ -66,12 +66,13 @@ export default {
     ...mapGetters({
       getAddress: 'getAddress',
       getGroupNameByHash: 'getGroupNameByHash',
-      getNameByAddress: 'getNameByAddress'
+      getNameByAddress: 'getNameByAddress',
+      getGroupSessions: 'getGroupSessions'
     })
   },
   methods: {
     createGroup() {
-      let group_name = document.querySelector('input#input_group_name1').value
+      let group_name = document.querySelector('input#input_group_name1').value.trim()
       if (group_name == "") {
         alert("群组名不能为空...")
         return
@@ -83,9 +84,9 @@ export default {
       }
     },
     joinRequest() {
-      let group_address = document.querySelector('input#input_group_address').value
-      let group_hash = document.querySelector('input#input_group_hash').value
-      let group_name = document.querySelector('input#input_group_name2').value
+      let group_address = document.querySelector('input#input_group_address').value.trim()
+      let group_hash = document.querySelector('input#input_group_hash').value.trim()
+      let group_name = document.querySelector('input#input_group_name2').value.trim()
       if (group_address == "" || group_hash == "" || group_name == "") {
         alert("群组Hash、创建者账号、群组名均不能为空...")
         return
@@ -120,8 +121,8 @@ export default {
       })
     },
     renameGroup() {
-      let address = document.querySelector('input#input_address').value
-      let name = document.querySelector('input#input_name').value
+      let address = document.querySelector('input#input_address').value.trim()
+      let name = document.querySelector('input#input_name').value.trim()
       if (address == "" || name == "") {
         alert("账号和备注名均不能为空...")
         return
