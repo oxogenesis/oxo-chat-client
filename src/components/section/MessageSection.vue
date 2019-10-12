@@ -135,6 +135,19 @@ export default {
         }
       } else {
         //group-chat
+
+        //优先发送图片
+        if (img.src != '') {
+          this.$store.dispatch({
+            type: 'DeliverGroupMessage',
+            timestamp: timestamp,
+            group_hash: this.$store.state.OXO.CurrentSession,
+            content: img.src
+          })
+          img.src = ''
+          return
+        }
+        
         if (this.content.trim() == "") {
           alert("消息不能为空...")
         } else {
