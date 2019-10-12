@@ -765,8 +765,8 @@ function SavePrivateMessage(sour_address, messageJson) {
           }
           if (state.CurrentSession == sour_address) {
             //CurrentSession: show message
-            if (content.length > 22 && content.substring(0, 22) == 'data:image/png;base64,') {
-              content = `<img src="${content}" width="447">`
+            if (content.length > 22 && content[0, 22] == 'data:image/png;base64,') {
+              content = `<img src="${content}" width="494">`
             }
             state.Messages.push({ "address": sour_address, "timestamp": messageJson.Timestamp, "sequence": messageJson.Sequence, "created_at": created_at, "content": content, 'confirmed': false, 'hash': hash })
           } else {
@@ -2778,7 +2778,7 @@ const getters = {
                 sour_address = item.sour_address
               }
               let content = item.content
-              if (content.length > 22 && content.substring(0, 22) == 'data:image/png;base64,') {
+              if (content.length > 22 && content.substring(0,22) == 'data:image/png;base64,') {
                 content = `<img src="${content}" width="447">`
               }
               state.Messages.push({ 'address': sour_address, 'timestamp': item.timestamp, 'created_at': item.created_at, 'sequence': item.sequence, 'content': content, 'confirmed': item.confirmed, 'hash': item.hash })
