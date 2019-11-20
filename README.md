@@ -1,17 +1,5 @@
-# 需要前端小伙伴
-这个客户端只是个原型，还有很多需要美化优化的工作需要做。  
-主要代码并不复杂，客户端2000多行，服务端200多行，容易理解。  
-
-1. 希望能有一个前端帮忙把界面这块按正经项目的水平做一遍，对于vue使用上不合惯例的地方进行调整。  
-2. 希望能有移动端开发者将项目移植到移动端。
-  
-谢谢！  
-
-本项目纯粹是个人兴趣。  
 后续可能还会进行扩展：局域网内数据同步功能，数据中继远程系统互联机制，本地系统同时连接多个远程中继，消息内容格式扩展等。
 
-后续还有其他项目计划，需要c++11相关人才，苟富贵，定不相忘！  
-**namespacegenesis@gmail.com**
 
 
 # code
@@ -49,10 +37,6 @@ $ npm run sqlite3
 $ cd dist  
 $ npm install  
 $ npm run sqlite3  
-
-* if you could not compile sqlite for electron, copy node_sqlite3.node from lib to node_modules/sqlite3/lib/binding/  
-$ cp -r lib/electron-v4.0-win32-x64 node_modules/sqlite3/lib/binding/  
-$ cp -r lib/electron-v4.0-win32-x64 dist/node_modules/sqlite3/lib/binding/  
 
 * test  
 $ npm run test  
