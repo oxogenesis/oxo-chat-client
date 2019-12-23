@@ -1,11 +1,30 @@
 <template>
-  <li class="message-list-item">
+ <li :class="['message-list-item', myline]">
+  <div class="message-item-head">
     <h5 class="message-author-name">{{ getNameByAddress(message.address) }}#{{ message.sequence }}</h5>
     <div class="message-time">
-      {{ message.timestamp | time }}-->{{ message.created_at | time }}
+      <el-tooltip effect="light" :placement="toolTipDir">
+        <div slot="content"> 发送：{{ message.timestamp | time }}
+          <template v-if="myline==''"><br>接收：{{ message.created_at | time }}</template>
+          <template v-else><br> 确认：{{ message.created_at | time }}</template>
+        </div>
+        <i class="el-icon-alarm-clock"></i>
+      </el-tooltip>
+    </div>
+  </div>
+   <div class="message-textWrapper">
+      <div ref="content" :class="[{'message-confirm':message.confirmed}, 'message-text']"></div>
+   </div>
+   
+  </li>
+
+  <!--<li class="message-list-item">
+    <h5 class="message-author-name">{{ getNameByAddress(message.address) }}#{{ message.sequence }}</h5>
+    <div class="message-time">
+      {{ message.timestamp | time }}--{{ message.created_at | time }}
     </div>
     <div ref="content" :class="[{'message-confirm':message.confirmed}, 'message-text']"></div>
-  </li>
+  </li> -->
 </template>
 <script>
 import { mapActions, mapGetters } from 'vuex'
@@ -16,27 +35,39 @@ function insertAfter(newNode, referenceNode) {
 
 export default {
   name: 'Message',
+  data: function(){
+    return {
+      myAddress:  this.$store.state.OXO.Address
+    }
+  },
   props: {
     message: Object
   },
   computed: {
     ...mapGetters({
       getNameByAddress: 'getNameByAddress'
-    })
+    }),
+    myline: function(){
+      return this.myAddress == this.message.address ? 'myline':'';
+    },
+    toolTipDir: function(){
+      return this.myAddress == this.message.address ? 'left':'right';
+    }
   },
   mounted() {
     let content = this.message.content
-    console.log(this.message)
-    console.log(content)
     if (content.length > 22 && content.substring(0, 22) == 'data:image/png;base64,') {
       let newImg = document.createElement("img")
       newImg.src = content
       newImg.width = 447
       this.$refs.content.appendChild(newImg)
     } else {
-      this.$refs.content.innerHTML = content
+      content = content.replace(/\r/ig, "").replace(/\n/ig, "<br>");
+      this.$refs.content.innerHTML = content;
     }
   }
 }
 
 </script>
+<style scoped>
+</style>

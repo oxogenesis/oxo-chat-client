@@ -1,12 +1,15 @@
 <template>
   <div>
     <header-section></header-section>
-    <h1>首页</h1>
-    Address: {{address}}<br>
+    <div class="homeApp">
+      Address: {{address}}<br>
+    </div>
+    <footer-section></footer-section>
   </div>
 </template>
 <script>
 import HeaderSection from './section/HeaderSection.vue'
+import FooterSection from './section/FooterSection.vue'
 
 export default {
   data() {
@@ -15,7 +18,8 @@ export default {
     }
   },
   components: {
-    HeaderSection
+    HeaderSection,
+    FooterSection
   },
   created() {
     if(this.$store.state.OXO.Init == true) {
@@ -29,3 +33,10 @@ export default {
 }
 
 </script>
+<style scoped>
+  .homeApp{
+    font-family:'Microsoft YaHei', 'Muli', 'Helvetica Neue', helvetica, arial;
+    max-width: 1000px;
+    margin: 30px auto;
+  }
+</style>

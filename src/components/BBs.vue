@@ -2,16 +2,17 @@
 <template>
   <div>
     <header-section></header-section>
-    <h1>公告</h1>
     <div class="bulletin-board-app">
       <follow-section></follow-section>
       <bulletin-section></bulletin-section>
     </div>
+    <footer-section></footer-section>
 </template>
 <script>
 import HeaderSection from './section/HeaderSection.vue'
 import FollowSection from './section/FollowSection.vue'
 import BulletinSection from './section/BulletinSection.vue'
+import FooterSection from './section/FooterSection.vue'
 
 export default {
   data() {
@@ -21,8 +22,10 @@ export default {
   },
   components: {
     HeaderSection,
+    FooterSection,
     FollowSection,
     BulletinSection
+    
   },
   created() {
     this.$store.dispatch({
