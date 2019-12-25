@@ -1,30 +1,21 @@
 <template>
- <li :class="['message-list-item', myline]">
-  <div class="message-item-head">
-    <h5 class="message-author-name">{{ getNameByAddress(message.address) }}#{{ message.sequence }}</h5>
-    <div class="message-time">
-      <el-tooltip effect="light" :placement="toolTipDir">
-        <div slot="content"> 发送：{{ message.timestamp | time }}
-          <template v-if="myline==''"><br>接收：{{ message.created_at | time }}</template>
-          <template v-else><br> 确认：{{ message.created_at | time }}</template>
-        </div>
-        <i class="el-icon-alarm-clock"></i>
-      </el-tooltip>
+  <li :class="['message-list-item', myline]">
+    <div class="message-item-head">
+      <h5 class="message-author-name">{{ getNameByAddress(message.address) }}#{{ message.sequence }}</h5>
+      <div class="message-time">
+        <el-tooltip effect="light" :placement="toolTipDir">
+          <div slot="content"> 发送：{{ message.timestamp | time }}
+            <template v-if="myline==''"><br>接收：{{ message.created_at | time }}</template>
+            <template v-else><br> 确认：{{ message.created_at | time }}</template>
+          </div>
+          <i class="el-icon-alarm-clock"></i>
+        </el-tooltip>
+      </div>
     </div>
-  </div>
-   <div class="message-textWrapper">
+    <div class="message-textWrapper">
       <div ref="content" :class="[{'message-confirm':message.confirmed}, 'message-text']"></div>
-   </div>
-   
-  </li>
-
-  <!--<li class="message-list-item">
-    <h5 class="message-author-name">{{ getNameByAddress(message.address) }}#{{ message.sequence }}</h5>
-    <div class="message-time">
-      {{ message.timestamp | time }}--{{ message.created_at | time }}
     </div>
-    <div ref="content" :class="[{'message-confirm':message.confirmed}, 'message-text']"></div>
-  </li> -->
+  </li>
 </template>
 <script>
 import { mapActions, mapGetters } from 'vuex'
@@ -35,9 +26,9 @@ function insertAfter(newNode, referenceNode) {
 
 export default {
   name: 'Message',
-  data: function(){
+  data: function() {
     return {
-      myAddress:  this.$store.state.OXO.Address
+      myAddress: this.$store.state.OXO.Address
     }
   },
   props: {
@@ -47,11 +38,11 @@ export default {
     ...mapGetters({
       getNameByAddress: 'getNameByAddress'
     }),
-    myline: function(){
-      return this.myAddress == this.message.address ? 'myline':'';
+    myline: function() {
+      return this.myAddress == this.message.address ? 'myline' : '';
     },
-    toolTipDir: function(){
-      return this.myAddress == this.message.address ? 'left':'right';
+    toolTipDir: function() {
+      return this.myAddress == this.message.address ? 'left' : 'right';
     }
   },
   mounted() {

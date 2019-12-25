@@ -49,7 +49,6 @@ exports.cssLoaders = function (options) {
         use: loaders,
         fallback: 'vue-style-loader',
 
-        //add by cxx
         publicPath: '../../'
       })
     } else {

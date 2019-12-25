@@ -22,21 +22,21 @@ export default {
     FooterSection
   },
   created() {
-    if(this.$store.state.OXO.Init == true) {
+    if (this.$store.state.OXO.Init == true) {
       this.$store.dispatch('Loading', this.address)
       this.$store.dispatch('KeepConn')
       this.$store.state.OXO.Init = false
     }
   },
-  methods: {
-  }
+  methods: {}
 }
 
 </script>
 <style scoped>
-  .homeApp{
-    font-family:'Microsoft YaHei', 'Muli', 'Helvetica Neue', helvetica, arial;
-    max-width: 1000px;
-    margin: 30px auto;
-  }
+.homeApp {
+  font-family: 'Microsoft YaHei', 'Muli', 'Helvetica Neue', helvetica, arial;
+  max-width: 1000px;
+  margin: 30px auto;
+}
+
 </style>

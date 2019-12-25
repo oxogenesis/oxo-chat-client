@@ -1,7 +1,7 @@
 <template>
     <div class="outer-header">
         <header>
-            <p>oxo-chat 一款你用了就会爱上的便捷聊天软件</p>
+            <p>我选择做系统的主人，而不是系统的用户</p>
         </header>
     </div>
 </template>

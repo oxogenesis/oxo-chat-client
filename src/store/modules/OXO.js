@@ -1812,7 +1812,7 @@ function Conn() {
 
 const mutations = {
   //setHeader 
-  setHeader(state, str){
+  setHeader(state, str) {
     state.nowChosedHeader = str;
   },
   InitAccount(state, seed) {
@@ -1936,7 +1936,7 @@ const mutations = {
     })
   },
   RenameContact(state, payload) {
-    return new Promise(function(resolve, reject){
+    return new Promise(function(resolve, reject) {
       let timestamp = Date.now()
       let SQL = `UPDATE CONTACTS SET name = '${payload.name}', updated_at = ${timestamp} WHERE address = "${payload.address}"`
       state.DB.run(SQL, err => {
@@ -2188,6 +2188,7 @@ const mutations = {
     let timestamp = Date.now()
     let group_name = payload.group_name
     let group_hash = halfSHA512(state.Address + timestamp.toString() + crypto.randomBytes(16).toString('hex'))
+    group_hash = group_hash.substr(0, 32)
     let json = {
       "Action": state.ActionCode.GroupManage,
       "GroupHash": group_hash,
@@ -2469,7 +2470,7 @@ const mutations = {
 
 const actions = {
   //setHeader 
-  setHeader({ commit }, str){
+  setHeader({ commit }, str) {
     this.commit('setHeader', str);
   },
   //初始化数据库
@@ -2527,7 +2528,7 @@ const actions = {
     //compose message
     let key = payload.chatKey.slice(0, 32)
     let iv = payload.chatKey.slice(32, 48)
-    return new Promise(function(resolve, reject){
+    return new Promise(function(resolve, reject) {
       //get pair message not confirmed
       let SQL = `SELECT * FROM MESSAGES WHERE sour_address = '${state.CurrentSession}' AND confirmed = false ORDER BY sequence ASC LIMIT 8`
       state.DB.all(SQL, (err, items) => {
@@ -2586,7 +2587,7 @@ const actions = {
             }
           })
 
-          
+
         }
       })
 
@@ -2596,7 +2597,7 @@ const actions = {
   DeliverGroupMessage({ commit }, payload) {
     let group_hash = payload.group_hash
     //get pair message not confirmed
-    return new Promise(function(resolve, reject){
+    return new Promise(function(resolve, reject) {
       let SQL = `SELECT * FROM GROUP_MESSAGES WHERE group_hash = '${state.CurrentSession}' AND sour_address != '${state.Address}' ORDER BY created_at DESC`
       state.DB.get(SQL, (err, item) => {
         if (err) {
@@ -2626,17 +2627,17 @@ const actions = {
               "PublicKey": state.PublicKey
             }
           }
-  
+
           let sig = sign(JSON.stringify(json), state.PrivateKey)
           json.Signature = sig
-  
+
           let strJson = JSON.stringify(json)
           let hash = halfSHA512(strJson)
-  
+
           //save message
           SQL = `INSERT INTO GROUP_MESSAGES (group_hash, sour_address, sequence, pre_hash, content, timestamp, json, created_at, hash, readed)
             VALUES ('${group_hash}', '${state.Address}', ${state.CurrentGroupMessageSequence + 1}, '${state.CurrentGroupMessageHash}', '${payload.content}', '${payload.timestamp}', '${strJson}', '${payload.timestamp}', '${hash}', true)`
-  
+
           state.DB.run(SQL, err => {
             if (err) {
               console.log(err)
@@ -2644,9 +2645,9 @@ const actions = {
             } else {
               state.CurrentGroupMessageSequence += 1
               state.CurrentGroupMessageHash = hash
-  
+
               state.Messages.push({ "address": state.Address, "timestamp": payload.timestamp, "created_at": payload.timestamp, 'sequence': state.CurrentGroupMessageSequence, "content": payload.content, 'hash': hash })
-  
+
               BroadcastGroupMessage(json);
               resolve();
             }
@@ -2655,7 +2656,7 @@ const actions = {
       })
 
     })
-    
+
   },
   //bulletin board => BB
   LoadBBs({ commit }, payload) {
@@ -2732,7 +2733,7 @@ const actions = {
 
 const getters = {
   //nowChosedHeader
-  getNowChosedHeader: (state)=>{
+  getNowChosedHeader: (state) => {
     return state.nowChosedHeader;
   },
   //util
@@ -2796,39 +2797,39 @@ const getters = {
     return state.CurrentChatKey
   },
   getMessages: (state) => {
-      if (state.Messages.length == 0) {
-        if (state.CurrentSession[0] == 'o') {
-          let SQL = `SELECT * FROM MESSAGES WHERE sour_address = '${state.CurrentSession}' OR dest_address = '${state.CurrentSession}' ORDER BY created_at DESC LIMIT 20`
-          state.DB.all(SQL, (err, items) => {
-            if (err) {
-              console.log(err)
-            } else {
-              items.reverse()
-              for (const item of items) {
-                let sour_address = state.Address
-                if (item.sour_address != null) {
-                  sour_address = item.sour_address
-                }
-                state.Messages.push({ 'address': sour_address, 'timestamp': item.timestamp, 'created_at': item.created_at, 'sequence': item.sequence, 'content': item.content, 'confirmed': item.confirmed, 'hash': item.hash })
+    if (state.Messages.length == 0) {
+      if (state.CurrentSession[0] == 'o') {
+        let SQL = `SELECT * FROM MESSAGES WHERE sour_address = '${state.CurrentSession}' OR dest_address = '${state.CurrentSession}' ORDER BY created_at DESC LIMIT 20`
+        state.DB.all(SQL, (err, items) => {
+          if (err) {
+            console.log(err)
+          } else {
+            items.reverse()
+            for (const item of items) {
+              let sour_address = state.Address
+              if (item.sour_address != null) {
+                sour_address = item.sour_address
               }
-              return state.Messages
+              state.Messages.push({ 'address': sour_address, 'timestamp': item.timestamp, 'created_at': item.created_at, 'sequence': item.sequence, 'content': item.content, 'confirmed': item.confirmed, 'hash': item.hash })
             }
-          })
-        } else {
-          let SQL = `SELECT * FROM GROUP_MESSAGES WHERE group_hash = '${state.CurrentSession}' ORDER BY created_at DESC LIMIT 20`
-          state.DB.all(SQL, (err, items) => {
-            if (err) {
-              console.log(err)
-            } else {
-              items.reverse()
-              for (const item of items) {
-                state.Messages.push({ 'address': item.sour_address, 'timestamp': item.timestamp, 'created_at': item.created_at, 'sequence': item.sequence, 'content': item.content, 'hash': item.hash })
-              }
-              return state.Messages
+            return state.Messages
+          }
+        })
+      } else {
+        let SQL = `SELECT * FROM GROUP_MESSAGES WHERE group_hash = '${state.CurrentSession}' ORDER BY created_at DESC LIMIT 20`
+        state.DB.all(SQL, (err, items) => {
+          if (err) {
+            console.log(err)
+          } else {
+            items.reverse()
+            for (const item of items) {
+              state.Messages.push({ 'address': item.sour_address, 'timestamp': item.timestamp, 'created_at': item.created_at, 'sequence': item.sequence, 'content': item.content, 'hash': item.hash })
             }
-          })
-        }
+            return state.Messages
+          }
+        })
       }
+    }
   },
   //bulletin board => BB
   currentBBSession() {

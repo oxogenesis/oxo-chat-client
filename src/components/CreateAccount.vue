@@ -5,12 +5,11 @@
     <router-link to="/CreateAccountWithSeed">创建账号：使用种子</router-link><br>
   </div>
 </template>
-
 <script>
 export default {
-    data() {
-      return {
-      };
-    }
+  data() {
+    return {};
+  }
 }
+
 </script>

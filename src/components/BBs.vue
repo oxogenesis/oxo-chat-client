@@ -25,13 +25,13 @@ export default {
     FooterSection,
     FollowSection,
     BulletinSection
-    
+
   },
   created() {
     this.$store.dispatch({
       type: 'LoadBBs'
     })
-    
+
     if (this.$store.state.OXO.Follows.includes(this.$route.params.address)) {
       this.$store.dispatch('SwitchBBSession', this.$route.params.address)
     } else {

@@ -2,30 +2,24 @@
   <div>
     <div class="group">
       <h1 class="setting_title">群组</h1>
-      <el-form :label-position="labelPosition" label-width="80px"  size="mini" >
-        
+      <el-form :label-position="labelPosition" label-width="80px" size="mini">
         <el-form-item label="群组名:">
           <el-input v-model="input_group_name1" name="group_name"></el-input>
         </el-form-item>
-
         <el-row :gutter="20">
           <el-col style="margin-bottom: 10px;">
             <el-button size="mini" type="primary" @click="createGroup()">创建</el-button>
           </el-col>
         </el-row>
-
         <el-form-item label="创建者账号:">
           <el-input v-model="input_group_address" name="group_address"></el-input>
         </el-form-item>
-
-        <el-form-item label="群组Hash:">
+        <el-form-item label="群号:">
           <el-input v-model="input_group_hash" name="group_hash"></el-input>
         </el-form-item>
-
         <el-form-item label="群组名:">
           <el-input v-model="input_group_name2" name="group_name"></el-input>
         </el-form-item>
-        
         <el-row :gutter="20">
           <el-col style="margin-bottom: 10px;">
             <el-button size="mini" type="primary" @click="joinRequest()">申请加入</el-button>
@@ -35,9 +29,7 @@
           <dt class="dl_title">群组</dt>
         </dl>
         <ul class="group-list">
-          <li v-for="(group,index) in getGroupSessions"
-              :key="index">
-
+          <li v-for="(group,index) in getGroupSessions" :key="index">
             <div class="overTextEll group-name">
               <el-tooltip placement="left" effect="light">
                 <div slot="content">{{group.name}}</div>
@@ -51,7 +43,7 @@
             <span v-if="group.membership == 3">已退出</span>
             )：
             <span class="groupTime">{{group.timestamp | time}}</span>
-            <el-button size="mini" type="primary" v-if="group.membership == 0 || group.membership == 3"  @click="reRequest(1, group.address, group.session, group.name)">申请加入</el-button>
+            <el-button size="mini" type="primary" v-if="group.membership == 0 || group.membership == 3" @click="reRequest(1, group.address, group.session, group.name)">申请加入</el-button>
             <el-button size="mini" type="primary" v-if="group.membership == 2" @click="reRequest(0, group.address, group.session, group.name)">申请退出</el-button>
             <br>
             <div class="groupNumbers">
@@ -65,67 +57,20 @@
             <router-link class="group-link" :to="{name:'GroupMember', params:{group_hash:group.session}}">成员列表</router-link>
           </li>
         </ul>
-
         <dl class="dllist">
           <dt class="dl_title">加入申请：</dt>
         </dl>
         <ul>
-          <li v-for="(request,index) in this.$store.state.OXO.GroupRequests"
-              :key="index">
+          <li v-for="(request,index) in this.$store.state.OXO.GroupRequests" :key="index">
             {{getNameByAddress(request.address)}}
             =>{{getGroupNameByHash(request.group_hash)}}
             @{{request.timestamp | time}}
-             <el-button size="mini" type="primary" @click="permitJoin(request.address, request.group_hash, request.json)">同意</el-button>
+            <el-button size="mini" type="primary" @click="permitJoin(request.address, request.group_hash, request.json)">同意</el-button>
             <br>
           </li>
         </ul>
-
       </el-form>
-
-      
-      
     </div>
-
-    <!-- <header-section></header-section>
-    <h1>设置</h1>
-    <h3>Address : {{address}}</h3>
-    群组名: <input type="text" name="group_name" id="input_group_name1" /><br>
-    <input type="button" value="创建" @click="createGroup()" /><br>
-    <br>
-    创建者账号: <input type="text" name="group_address" id="input_group_address" /><br>
-    群组Hash: <input type="text" name="group_hash" id="input_group_hash" /><br>
-    群组名: <input type="text" name="group_name" id="input_group_name2" /><br>
-    <input type="button" value="申请加入" @click="joinRequest()" /><br>
-    <br>
-    群组：<br>
-    <ul>
-      <li v-for="group in getGroupSessions">
-        <router-link :to="{name:'Sessions', params:{session:group.session}}">{{group.name}}</router-link>
-        (
-        <span v-if="group.membership == 0">申请中</span>
-        <span v-if="group.membership == 1">创始人</span>
-        <span v-if="group.membership == 2">已加入</span>
-        <span v-if="group.membership == 3">已退出</span>
-        ):
-        @{{group.timestamp | time}}
-        <input v-if="group.membership == 0 || group.membership == 3" type="button" value="申请加入" @click="reRequest(1, group.address, group.session, group.name)" />
-        <input v-if="group.membership == 2" type="button" value="申请退出" @click="reRequest(0, group.address, group.session, group.name)" />
-        <br>
-        群号:{{group.session}}
-        <router-link :to="{name:'GroupMember', params:{group_hash:group.session}}">成员列表</router-link>
-      </li>
-    </ul>
-    <br>
-    加入申请：<br>
-    <ul>
-      <li v-for="request in this.$store.state.OXO.GroupRequests">
-        {{getNameByAddress(request.address)}}
-        =>{{getGroupNameByHash(request.group_hash)}}
-        @{{request.timestamp | time}}
-        <input type="button" value="同意" @click="permitJoin(request.address, request.group_hash, request.json)" />
-        <br>
-      </li>
-    </ul> -->
   </div>
 </template>
 <script>
@@ -167,10 +112,8 @@ export default {
   },
   methods: {
     createGroup() {
-      //let group_name = document.querySelector('input#input_group_name1').value.trim()
       let group_name = this.input_group_name1.trim();
       if (group_name == "") {
-        //alert("群组名不能为空...")
         this.$message({
           showClose: true,
           message: '群组名不能为空!',
@@ -185,22 +128,17 @@ export default {
       }
     },
     joinRequest() {
-      // let group_address = document.querySelector('input#input_group_address').value.trim()
-      // let group_hash = document.querySelector('input#input_group_hash').value.trim()
-      // let group_name = document.querySelector('input#input_group_name2').value.trim()
       let group_address = this.input_group_address.trim()
       let group_hash = this.input_group_hash.trim()
       let group_name = this.input_group_name2.trim()
       if (group_address == "" || group_hash == "" || group_name == "") {
-        //alert("群组Hash、创建者账号、群组名均不能为空...")
         this.$message({
           showClose: true,
-          message: '群组Hash、创建者账号、群组名均不能为空!',
+          message: '创建者账号、群号、群组名均不能为空!',
           type: 'warning'
         });
         return
       } else if (group_address == this.$store.state.OXO.Address) {
-        //alert("你是这个群组的创始人...")
         this.$message({
           showClose: true,
           message: '你是这个群组的创始人!',
@@ -235,12 +173,9 @@ export default {
       })
     },
     renameGroup() {
-      // let address = document.querySelector('input#input_address').value.trim()
-      // let name = document.querySelector('input#input_name').value.trim()
       let address = this.input_address.trim()
       let name = this.input_name.trim()
       if (address == "" || name == "") {
-        //alert("账号和备注名均不能为空...")
         this.$message({
           showClose: true,
           message: '账号和备注名均不能为空!',
@@ -248,7 +183,6 @@ export default {
         });
         return
       } else if (address == this.address) {
-        //alert("不支持将自己作为联系人...")
         this.$message({
           showClose: true,
           message: '不支持将自己作为联系人!',
@@ -269,7 +203,6 @@ export default {
         address: address
       })
       if (result == false) {
-        //alert("删除联系人，需先解除好友和关注")
         this.$message({
           showClose: true,
           message: '删除联系人，需先解除好友和关注!',
@@ -288,66 +221,75 @@ export default {
 
 </script>
 <style scoped>
-  .group{
-    text-align: left;
-    padding-left: 20px; 
-  }
-  .group >>> .el-form-item__label{
-    height: 34px;
-    padding: 0;
-  }
-  .group >>> .el-form-item{
-    margin-bottom: 10px;
-  }
-  .group >>> .el-input__inner{
-    width: 100%;
-  }
+.group {
+  text-align: left;
+  padding-left: 20px;
+}
 
-  .dllist{
-    padding-bottom: 10px; 
-  }
-  .dl_title{
-    line-height: 34px;
-    font-weight: bold;
-  }
-  .dl_item{
-    line-height: 36px;
-  }
+.group>>>.el-form-item__label {
+  height: 34px;
+  padding: 0;
+}
 
-  .groupTime{
-    font-size: 12px;
-    color: #938e8e;
-    margin-left: 10px;
-  }
-  .group-list li{
-    font-size: 16px;
-    border-bottom: 1px solid #eee;
-    margin-bottom: 5px;
-    padding: 5px 0;
-    line-height: 24px;
-    word-break: break-word;
-  }
-  .group-link{
-    color: #3a8ee6;
-  }
+.group>>>.el-form-item {
+  margin-bottom: 10px;
+}
 
-  .group-list li a:hover{
-    color: #3a8ee6;
-    text-decoration: underline;
-  }
+.group>>>.el-input__inner {
+  width: 100%;
+}
 
-  
-  .overTextEll{
-    display: inline-block;
-    vertical-align: middle;
-    max-width: 666px;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-    height: 28px;
-    line-height: 28px;
-  }
-  .group-name{
-    max-width: 430px;
-  }
+.dllist {
+  padding-bottom: 10px;
+}
+
+.dl_title {
+  line-height: 34px;
+  font-weight: bold;
+}
+
+.dl_item {
+  line-height: 36px;
+}
+
+.groupTime {
+  font-size: 12px;
+  color: #938e8e;
+  margin-left: 10px;
+}
+
+.group-list li {
+  font-size: 16px;
+  border-bottom: 1px solid #eee;
+  margin-bottom: 5px;
+  padding: 5px 0;
+  line-height: 24px;
+  word-break: break-word;
+}
+
+.group-link {
+  color: #3a8ee6;
+}
+
+.group-list li a:hover {
+  color: #3a8ee6;
+  text-decoration: underline;
+}
+
+
+.overTextEll {
+  display: inline-block;
+  vertical-align: middle;
+  max-width: 666px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  height: 28px;
+  line-height: 28px;
+}
+
+.group-name {
+  max-width: 430px;
+}
+
 </style>

@@ -14,42 +14,21 @@
           <dt class="dl_title">当前成员列表：</dt>
           <dd>
             <ul>
-              <li v-for="(member,index) in this.$store.state.OXO.CurrentGroupMembers"
-                  :key="index">
+              <li v-for="(member,index) in this.$store.state.OXO.CurrentGroupMembers" :key="index">
                 {{getNameByAddress(member.address)}}
                 <span class="time-span">{{member.joined_at | time}}</span>
-                <el-button v-if="getCurrentGroupAddress != member.address && getCurrentGroupAddress == getAddress"  @click="removeGroupMember(member.address)"  type="primary">移除</el-button>
+                <el-button v-if="getCurrentGroupAddress != member.address && getCurrentGroupAddress == getAddress" @click="removeGroupMember(member.address)" type="primary">移除</el-button>
               </li>
             </ul>
           </dd>
           <dd>
             <el-link type="primary" icon="el-icon-back" href="#/Setting">返回</el-link>
           </dd>
-        <dl>
+          <dl>
       </div>
-      <footer-section/>
+      <footer-section />
     </div>
-    
   </div>
-  <!-- <div>
-    <header-section></header-section>
-    <h1>设置</h1>
-    <router-link to="/Group">群组</router-link><br>
-    <h1>{{this.$store.state.OXO.CurrentGroup.name}}</h1>
-    {{this.$store.state.OXO.CurrentGroup.session}}<br>
-    @{{this.$store.state.OXO.CurrentGroup.timestamp | time}}<br>
-    <ul>
-      <li v-for="(member,index) in this.$store.state.OXO.CurrentGroupMembers"
-          :key="index">
-        {{getNameByAddress(member.address)}}
-        @{{member.joined_at | time}}
-        <input v-if="getCurrentGroupAddress != member.address && getCurrentGroupAddress == getAddress" type="button" value="移除" @click="removeGroupMember(member.address)" />
-        <br>
-      </li>
-    </ul>
-    <footer-section/>
-  </div> -->
-
 </template>
 <script>
 import HeaderSection from './section/HeaderSection.vue'
@@ -93,31 +72,37 @@ export default {
 
 </script>
 <style scoped>
-  .groupMembody{
-    width: 1000px;
-    margin: 30px auto;
-    word-break: break-word;
-  }
-  .dllist{
-    padding-bottom: 10px; 
-    text-align: left;
-    line-height: 34px;
-    border-bottom: 1px solid #eee;
-  }
-  .dl_title{
-    font-weight: bold;
-    line-height: 34px;
-  }
-  .dl_item{
-    line-height: 36px;
-    font-size: 16px;
-    line-height: 28px;
-  }
-  .time-span{
-    color: #aad;
-    font-size: 12px;
-  }
-  .groupMembody dd{
-    word-break: break-all;
-  }
+.groupMembody {
+  width: 1000px;
+  margin: 30px auto;
+  word-break: break-word;
+}
+
+.dllist {
+  padding-bottom: 10px;
+  text-align: left;
+  line-height: 34px;
+  border-bottom: 1px solid #eee;
+}
+
+.dl_title {
+  font-weight: bold;
+  line-height: 34px;
+}
+
+.dl_item {
+  line-height: 36px;
+  font-size: 16px;
+  line-height: 28px;
+}
+
+.time-span {
+  color: #aad;
+  font-size: 12px;
+}
+
+.groupMembody dd {
+  word-break: break-all;
+}
+
 </style>

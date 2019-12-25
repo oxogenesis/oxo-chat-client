@@ -1,7 +1,6 @@
 <template>
- <div>
-    <outer-header/>
-
+  <div>
+    <outer-header />
     <div class="login-box">
       <div class="login-inner">
         <h1 class="login-head">使用种子创建账号</h1>
@@ -14,34 +13,22 @@
               <el-input type="password" name="password" v-model="input_password"></el-input>
             </el-form-item>
             <el-form-item label="口令确认：">
-              <el-input type="password" name="confirm" v-model="input_confirm"  @keyup.enter.native="CreateAccount()"></el-input>
+              <el-input type="password" name="confirm" v-model="input_confirm" @keyup.enter.native="CreateAccount()"></el-input>
             </el-form-item>
             <el-form-item label-width="0">
               <el-button type="primary" @click="CreateAccount()">创建</el-button>
-              <router-link to="/"  id="backup">
+              <router-link to="/" id="backup">
                 <el-button type="primary">返回</el-button>
               </router-link>
             </el-form-item>
           </el-form>
-
         </div>
       </div>
     </div>
-    
-    <outer-footer/>
+    <outer-footer />
   </div>
-
-  <!-- 
-     <router-link to="/">首页</router-link><br>
-        种子: <input type="text" name="seed" id="input_seed" /><br>
-        口令: <input type="password" name="password" id="input_password" /><br>
-        口令确认: <input type="password" name="confirm" id="input_confirm" /><br>
-        <input type="button" value="创建" @click="CreateAccount()" /><br>
-   -->
-  
 </template>
 <script>
-
 import OuterHeader from './section/OuterHeader'
 import OuterFooter from './section/OuterFooter'
 const remote = window.require('electron').remote
@@ -59,16 +46,13 @@ export default {
       input_confirm: ""
     }
   },
-  components:{
+  components: {
     OuterFooter,
     OuterHeader
   },
   methods: {
 
     CreateAccount() {
-      // let seed = document.querySelector('input#input_seed').value.trim()
-      // let password = document.querySelector('input#input_password').value.trim()
-      // let confirm = document.querySelector('input#input_confirm').value.trim()
       let seed = this.input_seed.trim()
       let password = this.input_password.trim()
       let confirm = this.input_confirm.trim()
@@ -99,7 +83,6 @@ export default {
                 if (err) {
                   console.log('写文件操作失败')
                 } else {
-                  //alert('账号创建成功，种子文件保存成功！')
                   self.$message({
                     showClose: true,
                     message: '账号创建成功，种子文件保存成功！',
@@ -113,7 +96,6 @@ export default {
               })
             });
           } catch (e) {
-            //alert('种子无效...');
             self.$message({
               showClose: true,
               message: '种子无效!',
@@ -121,7 +103,6 @@ export default {
             });
           }
         } else {
-          //alert("口令与口令确认不相同...")
           self.$message({
             showClose: true,
             message: '口令与口令确认不相同!',
@@ -129,7 +110,6 @@ export default {
           });
         }
       } else {
-        //alert("口令不能为空...")
         self.$message({
           showClose: true,
           message: '口令不能为空!',
@@ -142,11 +122,12 @@ export default {
 
 </script>
 <style scoped>
-  #backup >>> a{
-    color: #fff; 
-  }
-  #backup{
-    margin-left: 30px;
-  }
- 
+#backup>>>a {
+  color: #fff;
+}
+
+#backup {
+  margin-left: 30px;
+}
+
 </style>
