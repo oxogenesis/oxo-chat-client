@@ -4,6 +4,9 @@ import Vue from 'vue'
 import App from './App'
 import router from './router'
 import store from './store'
+import ElementUi from 'element-ui'
+
+Vue.use(ElementUi);
 
 function add0(m) { return m < 10 ? '0' + m : m }
 

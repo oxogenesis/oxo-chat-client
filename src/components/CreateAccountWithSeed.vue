@@ -1,13 +1,49 @@
 <template>
-  <div>
-    <router-link to="/">首页</router-link><br>
-    种子: <input type="text" name="seed" id="input_seed" /><br>
-    口令: <input type="password" name="password" id="input_password" /><br>
-    口令确认: <input type="password" name="confirm" id="input_confirm" /><br>
-    <input type="button" value="创建" @click="CreateAccount()" /><br>
+ <div>
+    <outer-header/>
+
+    <div class="login-box">
+      <div class="login-inner">
+        <h1 class="login-head">使用种子创建账号</h1>
+        <div class="login-body">
+          <el-form label-width="100px" size="mini">
+            <el-form-item label="种子：">
+              <el-input type="text" name="seed" v-model="input_seed"></el-input>
+            </el-form-item>
+            <el-form-item label="口令：" @submit.native.prevent>
+              <el-input type="password" name="password" v-model="input_password"></el-input>
+            </el-form-item>
+            <el-form-item label="口令确认：">
+              <el-input type="password" name="confirm" v-model="input_confirm"  @keyup.enter.native="CreateAccount()"></el-input>
+            </el-form-item>
+            <el-form-item label-width="0">
+              <el-button type="primary" @click="CreateAccount()">创建</el-button>
+              <router-link to="/"  id="backup">
+                <el-button type="primary">返回</el-button>
+              </router-link>
+            </el-form-item>
+          </el-form>
+
+        </div>
+      </div>
+    </div>
+    
+    <outer-footer/>
   </div>
+
+  <!-- 
+     <router-link to="/">首页</router-link><br>
+        种子: <input type="text" name="seed" id="input_seed" /><br>
+        口令: <input type="password" name="password" id="input_password" /><br>
+        口令确认: <input type="password" name="confirm" id="input_confirm" /><br>
+        <input type="button" value="创建" @click="CreateAccount()" /><br>
+   -->
+  
 </template>
 <script>
+
+import OuterHeader from './section/OuterHeader'
+import OuterFooter from './section/OuterFooter'
 const remote = window.require('electron').remote
 const dialog = remote.dialog
 const fs = window.require("fs")
@@ -15,11 +51,28 @@ const oxoKeyPairs = require("oxo-keypairs")
 const crypto = require("crypto")
 
 export default {
+  name: "CreateAccountWithSeed",
+  data() {
+    return {
+      input_seed: "",
+      input_password: "",
+      input_confirm: ""
+    }
+  },
+  components:{
+    OuterFooter,
+    OuterHeader
+  },
   methods: {
+
     CreateAccount() {
-      let seed = document.querySelector('input#input_seed').value.trim()
-      let password = document.querySelector('input#input_password').value.trim()
-      let confirm = document.querySelector('input#input_confirm').value.trim()
+      // let seed = document.querySelector('input#input_seed').value.trim()
+      // let password = document.querySelector('input#input_password').value.trim()
+      // let confirm = document.querySelector('input#input_confirm').value.trim()
+      let seed = this.input_seed.trim()
+      let password = this.input_password.trim()
+      let confirm = this.input_confirm.trim()
+      let self = this;
       if (password != "") {
         if (password == confirm) {
           try {
@@ -46,21 +99,54 @@ export default {
                 if (err) {
                   console.log('写文件操作失败')
                 } else {
-                  alert('账号创建成功，种子文件保存成功！')
+                  //alert('账号创建成功，种子文件保存成功！')
+                  self.$message({
+                    showClose: true,
+                    message: '账号创建成功，种子文件保存成功！',
+                    type: 'success'
+                  });
+
+                  setTimeout(() => {
+                    document.getElementById("backup").click();
+                  }, 1000);
                 }
               })
             });
           } catch (e) {
-            alert('种子无效...');
+            //alert('种子无效...');
+            self.$message({
+              showClose: true,
+              message: '种子无效!',
+              type: 'error'
+            });
           }
         } else {
-          alert("口令与口令确认不相同...")
+          //alert("口令与口令确认不相同...")
+          self.$message({
+            showClose: true,
+            message: '口令与口令确认不相同!',
+            type: 'warning'
+          });
         }
       } else {
-        alert("口令不能为空...")
+        //alert("口令不能为空...")
+        self.$message({
+          showClose: true,
+          message: '口令不能为空!',
+          type: 'warning'
+        });
       }
     }
   }
 }
 
 </script>
+<style scoped>
+  #backup >>> a{
+    color: #fff; 
+  }
+  #backup{
+    margin-left: 30px;
+  }
+ 
+</style>

@@ -1,28 +1,50 @@
 .bulletin-board-app {
-  font-family: 'Muli', 'Helvetica Neue', helvetica, arial;
-  max-width: 760px;
-  margin: 20px auto;
+  font-family:'Microsoft YaHei', 'Muli', 'Helvetica Neue', helvetica, arial;
+  max-width: 1000px;
+  margin: 30px auto;
   overflow: hidden;
+}
+
+.follow-head, 
+.session-head{
+  height: 50px;
+  width: 100%;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  background: #409eff;
+}
+.follow-head span, 
+.session-head span{
+  font-size: 18px;
+  color: #fff;
 }
 
 .bulletin-list,
 .follow-list {
-  border: 1px solid #ccf;
+  border: 1px solid #409eff;
   font-size: 16px;
-  height: 400px;
+  height: 436px;
   margin: 0;
   overflow-y: auto;
   padding: 0;
 }
+.bulletin-list{
+  height: 450px;
+}
+.follow-list{
+  background: #cccccc10;
+  height: 500px;
+}
 
 .bulletin-section {
   float: right;
-  width: 65%;
+  width: 67%;
 }
 
 .follow-section {
   float: left;
-  width: 32.5%;
+  width: 30%;
 }
 
 .bulletin-follow-heading,
@@ -31,23 +53,44 @@
   margin: 0;
 }
 
-.bulletin-list-item,
-.follow-list-item {
+.bulletin-list-item{
   list-style: none;
-  padding: 12px 14px 14px;
+  padding: 6px 14px;
+  background: #cccccc10;
 }
 
+.bulletin-list-item:nth-child(even){
+  background: #fff;
+}
+
+
 .follow-list-item {
-  border-bottom: 1px solid #ccc;
+  border-bottom: 1px dashed #409eff;
   cursor: pointer;
+  display: flex;
+  justify-content: space-between;
+  padding: 10px;
+  background: #fff;
 }
 
 .follow-list:hover .follow-list-item:hover {
   background-color: #f8f8ff;
 }
 
-.follow-list:hover .follow-list-item {
+/* .follow-list:hover .follow-list-item {
   background-color: #fff;
+} */
+
+.follow-name {
+  color: #000;
+  font-size: 14px;
+  line-height: 1;
+  margin: 0;
+}
+
+.follow-time {
+  color: #aad;
+  font-size: 12px;
 }
 
 .follow-list-item.active,
@@ -59,15 +102,29 @@
 
 .bulletin-author-name,
 .bulletin-quote-link,
-.follow-name {
-  color: #66c;
+.bulletin-quote-showlink{
+  color: #409eff;
   float: left;
-  font-size: 13px;
+  font-size: 14px;
+  line-height: 18px;
   margin: 0;
 }
+.bulletin-author-name{
+  color: #333;
+  font-weight:700;
+}
+.bulletin-quote-link{
+  color: #409eff;
+  cursor: pointer;    
+  margin-left: 2px;
+}
+.bulletin-quote-showlink{
+  color: #409eff;
+  cursor: pointer;
+  margin-left: 2px;
+}
 
-.bulletin-time,
-.follow-time {
+.bulletin-time{
   color: #aad;
   float: right;
   font-size: 12px;
@@ -76,7 +133,9 @@
 .bulletin-text {
   clear: both;
   font-size: 14px;
+  line-height: 20px;
   padding-top: 10px;
+  text-align: left;
 }
 
 .bulletin-confirm {
@@ -87,8 +146,6 @@
   box-sizing: border-box;
   font-family: inherit;
   font-size: 14px;
-  height: 5em;
   width: 100%;
   margin: 20px 0 0;
-  padding: 10px;
 }

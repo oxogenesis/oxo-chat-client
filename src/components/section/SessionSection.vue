@@ -1,5 +1,18 @@
 <template>
   <div class="session-section">
+    <div class="session-head"><span>联系人列表</span></div>
+    <ul class="session-list">
+      <session
+        v-for="(session,index) in getSessions"
+        :key="index"
+        :session="session"
+        :active="session.session === getCurrentSession"
+        @switch-session="switchSession"
+        >
+      </session>
+    </ul>
+  </div>
+  <!-- <div class="session-section">
     <ul class="session-list">
       <session
         v-for="session in getSessions"
@@ -9,7 +22,7 @@
         >
       </session>
     </ul>
-  </div>
+  </div> -->
 </template>
 
 <script>

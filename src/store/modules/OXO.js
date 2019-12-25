@@ -31,6 +31,9 @@ const DefaultHost = 'ws://127.0.0.1:3000'
 const MessageInterval = 1000
 
 const state = {
+  //header
+  nowChosedHeader: "首页",
+
   //self
   Seed: '',
   Address: '',
@@ -1808,6 +1811,10 @@ function Conn() {
 }
 
 const mutations = {
+  //setHeader 
+  setHeader(state, str){
+    state.nowChosedHeader = str;
+  },
   InitAccount(state, seed) {
     try {
       state.Seed = seed
@@ -1929,21 +1936,26 @@ const mutations = {
     })
   },
   RenameContact(state, payload) {
-    let timestamp = Date.now()
-    let SQL = `UPDATE CONTACTS SET name = '${payload.name}', updated_at = ${timestamp} WHERE address = "${payload.address}"`
-    state.DB.run(SQL, err => {
-      if (err) {
-        console.log(err)
-      } else {
-        state.Contacts[payload.address] = payload.name
-        for (let i = state.ContactsArray.length - 1; i >= 0; i--) {
-          if (state.ContactsArray[i].address == payload.address) {
-            state.ContactsArray[i].name = payload.name
-            state.ContactsArray[i].updated_at = timestamp
-            break
+    return new Promise(function(resolve, reject){
+      let timestamp = Date.now()
+      let SQL = `UPDATE CONTACTS SET name = '${payload.name}', updated_at = ${timestamp} WHERE address = "${payload.address}"`
+      state.DB.run(SQL, err => {
+        if (err) {
+          console.log(err);
+          reject();
+        } else {
+          state.Contacts[payload.address] = payload.name
+          for (let i = state.ContactsArray.length - 1; i >= 0; i--) {
+            if (state.ContactsArray[i].address == payload.address) {
+              state.ContactsArray[i].name = payload.name
+              state.ContactsArray[i].updated_at = timestamp
+              resolve();
+              break
+            }
           }
         }
-      }
+      })
+
     })
   },
   RemoveContact(state, address) {
@@ -2456,6 +2468,10 @@ const mutations = {
 }
 
 const actions = {
+  //setHeader 
+  setHeader({ commit }, str){
+    this.commit('setHeader', str);
+  },
   //初始化数据库
   Loading({ commit }, address) {
     InitDB(address)
@@ -2511,126 +2527,141 @@ const actions = {
     //compose message
     let key = payload.chatKey.slice(0, 32)
     let iv = payload.chatKey.slice(32, 48)
-
-    //get pair message not confirmed
-    let SQL = `SELECT * FROM MESSAGES WHERE sour_address = '${state.CurrentSession}' AND confirmed = false ORDER BY sequence ASC LIMIT 8`
-    state.DB.all(SQL, (err, items) => {
-      if (err) {
-        console.log(err)
-      } else {
-        let pairHash = []
-        for (let i = items.length - 1; i >= 0; i--) {
-          pairHash.push(items[i].hash)
-        }
-
-        let json = {
-          "Action": state.ActionCode.ChatMessage,
-          "Sequence": state.CurrentMessageSequence + 1,
-          "PreHash": state.CurrentMessageHash,
-          "PairHash": pairHash,
-          "Content": encrypt(key, iv, payload.content),
-          "To": payload.address,
-          "Timestamp": payload.timestamp,
-          "PublicKey": state.PublicKey
-        }
-        let sig = sign(JSON.stringify(json), state.PrivateKey)
-        json.Signature = sig
-        let strJson = JSON.stringify(json)
-        let hash = halfSHA512(strJson)
-
-        //save message
-        SQL = `INSERT INTO MESSAGES (dest_address, sequence, pre_hash, content, timestamp, json, created_at, readed, hash)
-          VALUES ('${payload.address}', ${state.CurrentMessageSequence + 1}, '${state.CurrentMessageHash}', '${payload.content}', '${payload.timestamp}', '${strJson}', '${payload.timestamp}', true, '${hash}')`
-
-        state.DB.run(SQL, err => {
-          if (err) {
-            console.log(err)
-          } else {
-            state.WS.send(strJson)
-            state.Messages.push({ "address": state.Address, "timestamp": payload.timestamp, "created_at": payload.timestamp, 'sequence': state.CurrentMessageSequence + 1, "content": payload.content, 'confirmed': false, 'hash': hash })
-            state.CurrentMessageSequence += 1
-            state.CurrentMessageHash = hash
-
-            SQL = `UPDATE MESSAGES SET confirmed = true WHERE sour_address = '${payload.address}' AND hash IN (${Array2Str(pairHash)})`
-            state.DB.run(SQL, err => {
-              if (err) {
-                console.log(err)
-              } else {
-                for (let i = state.Messages.length - 1; i >= 0; i--) {
-                  if (pairHash.includes(state.Messages[i].hash)) {
-                    state.Messages[i].confirmed = true
-                  }
-                }
-              }
-            })
+    return new Promise(function(resolve, reject){
+      //get pair message not confirmed
+      let SQL = `SELECT * FROM MESSAGES WHERE sour_address = '${state.CurrentSession}' AND confirmed = false ORDER BY sequence ASC LIMIT 8`
+      state.DB.all(SQL, (err, items) => {
+        if (err) {
+          console.log(err);
+          reject();
+        } else {
+          let pairHash = []
+          for (let i = items.length - 1; i >= 0; i--) {
+            pairHash.push(items[i].hash)
           }
-        })
-      }
+
+          let json = {
+            "Action": state.ActionCode.ChatMessage,
+            "Sequence": state.CurrentMessageSequence + 1,
+            "PreHash": state.CurrentMessageHash,
+            "PairHash": pairHash,
+            "Content": encrypt(key, iv, payload.content),
+            "To": payload.address,
+            "Timestamp": payload.timestamp,
+            "PublicKey": state.PublicKey
+          }
+          let sig = sign(JSON.stringify(json), state.PrivateKey)
+          json.Signature = sig
+          let strJson = JSON.stringify(json)
+          let hash = halfSHA512(strJson)
+
+          //save message
+          SQL = `INSERT INTO MESSAGES (dest_address, sequence, pre_hash, content, timestamp, json, created_at, readed, hash)
+            VALUES ('${payload.address}', ${state.CurrentMessageSequence + 1}, '${state.CurrentMessageHash}', '${payload.content}', '${payload.timestamp}', '${strJson}', '${payload.timestamp}', true, '${hash}')`
+
+          state.DB.run(SQL, err => {
+            if (err) {
+              console.log(err)
+              reject();
+            } else {
+              state.WS.send(strJson)
+              state.Messages.push({ "address": state.Address, "timestamp": payload.timestamp, "created_at": payload.timestamp, 'sequence': state.CurrentMessageSequence + 1, "content": payload.content, 'confirmed': false, 'hash': hash })
+              state.CurrentMessageSequence += 1
+              state.CurrentMessageHash = hash
+
+              SQL = `UPDATE MESSAGES SET confirmed = true WHERE sour_address = '${payload.address}' AND hash IN (${Array2Str(pairHash)})`
+              state.DB.run(SQL, err => {
+                if (err) {
+                  console.log(err)
+                  reject();
+                } else {
+                  for (let i = state.Messages.length - 1; i >= 0; i--) {
+                    if (pairHash.includes(state.Messages[i].hash)) {
+                      state.Messages[i].confirmed = true
+                    }
+                  }
+                  resolve();
+                }
+              })
+            }
+          })
+
+          
+        }
+      })
+
     })
   },
   //group
   DeliverGroupMessage({ commit }, payload) {
     let group_hash = payload.group_hash
     //get pair message not confirmed
-    let SQL = `SELECT * FROM GROUP_MESSAGES WHERE group_hash = '${state.CurrentSession}' AND sour_address != '${state.Address}' ORDER BY created_at DESC`
-    state.DB.get(SQL, (err, item) => {
-      if (err) {
-        console.log(err)
-      } else {
-        let json = null
-        if (item == null) {
-          json = {
-            "Action": state.ActionCode.GroupMessage,
-            "GroupHash": group_hash,
-            "Sequence": state.CurrentGroupMessageSequence + 1,
-            "PreHash": state.CurrentGroupMessageHash,
-            "Content": payload.content,
-            "Timestamp": payload.timestamp,
-            "PublicKey": state.PublicKey
-          }
+    return new Promise(function(resolve, reject){
+      let SQL = `SELECT * FROM GROUP_MESSAGES WHERE group_hash = '${state.CurrentSession}' AND sour_address != '${state.Address}' ORDER BY created_at DESC`
+      state.DB.get(SQL, (err, item) => {
+        if (err) {
+          console.log(err)
+          reject();
         } else {
-          json = {
-            "Action": state.ActionCode.GroupMessage,
-            "GroupHash": group_hash,
-            "Sequence": state.CurrentGroupMessageSequence + 1,
-            "PreHash": state.CurrentGroupMessageHash,
-            "Confirm": { "Address": item.sour_address, "Sequence": item.sequence, "Hash": item.hash },
-            "Content": payload.content,
-            "Timestamp": payload.timestamp,
-            "PublicKey": state.PublicKey
-          }
-        }
-
-        let sig = sign(JSON.stringify(json), state.PrivateKey)
-        json.Signature = sig
-
-        let strJson = JSON.stringify(json)
-        let hash = halfSHA512(strJson)
-
-        //save message
-        SQL = `INSERT INTO GROUP_MESSAGES (group_hash, sour_address, sequence, pre_hash, content, timestamp, json, created_at, hash, readed)
-          VALUES ('${group_hash}', '${state.Address}', ${state.CurrentGroupMessageSequence + 1}, '${state.CurrentGroupMessageHash}', '${payload.content}', '${payload.timestamp}', '${strJson}', '${payload.timestamp}', '${hash}', true)`
-
-        state.DB.run(SQL, err => {
-          if (err) {
-            console.log(err)
+          let json = null
+          if (item == null) {
+            json = {
+              "Action": state.ActionCode.GroupMessage,
+              "GroupHash": group_hash,
+              "Sequence": state.CurrentGroupMessageSequence + 1,
+              "PreHash": state.CurrentGroupMessageHash,
+              "Content": payload.content,
+              "Timestamp": payload.timestamp,
+              "PublicKey": state.PublicKey
+            }
           } else {
-            state.CurrentGroupMessageSequence += 1
-            state.CurrentGroupMessageHash = hash
-
-            state.Messages.push({ "address": state.Address, "timestamp": payload.timestamp, "created_at": payload.timestamp, 'sequence': state.CurrentGroupMessageSequence, "content": payload.content, 'hash': hash })
-
-            BroadcastGroupMessage(json)
+            json = {
+              "Action": state.ActionCode.GroupMessage,
+              "GroupHash": group_hash,
+              "Sequence": state.CurrentGroupMessageSequence + 1,
+              "PreHash": state.CurrentGroupMessageHash,
+              "Confirm": { "Address": item.sour_address, "Sequence": item.sequence, "Hash": item.hash },
+              "Content": payload.content,
+              "Timestamp": payload.timestamp,
+              "PublicKey": state.PublicKey
+            }
           }
-        })
-      }
+  
+          let sig = sign(JSON.stringify(json), state.PrivateKey)
+          json.Signature = sig
+  
+          let strJson = JSON.stringify(json)
+          let hash = halfSHA512(strJson)
+  
+          //save message
+          SQL = `INSERT INTO GROUP_MESSAGES (group_hash, sour_address, sequence, pre_hash, content, timestamp, json, created_at, hash, readed)
+            VALUES ('${group_hash}', '${state.Address}', ${state.CurrentGroupMessageSequence + 1}, '${state.CurrentGroupMessageHash}', '${payload.content}', '${payload.timestamp}', '${strJson}', '${payload.timestamp}', '${hash}', true)`
+  
+          state.DB.run(SQL, err => {
+            if (err) {
+              console.log(err)
+              reject();
+            } else {
+              state.CurrentGroupMessageSequence += 1
+              state.CurrentGroupMessageHash = hash
+  
+              state.Messages.push({ "address": state.Address, "timestamp": payload.timestamp, "created_at": payload.timestamp, 'sequence': state.CurrentGroupMessageSequence, "content": payload.content, 'hash': hash })
+  
+              BroadcastGroupMessage(json);
+              resolve();
+            }
+          })
+        }
+      })
+
     })
+    
   },
   //bulletin board => BB
   LoadBBs({ commit }, payload) {
     state.BBSessions = []
-    state.BBSessions.push({ 'address': '*', 'name': 'ALL' })
-    state.BBSessions.push({ 'address': '#', 'name': 'ME' })
+    state.BBSessions.push({ 'address': '*', 'name': '全部' })
+    state.BBSessions.push({ 'address': '#', 'name': '我' })
     for (let i = state.Follows.length - 1; i >= 0; i--) {
       let address = state.Follows[i]
       state.BBSessions.push({ 'address': address, 'name': state.Contacts[address] })
@@ -2700,6 +2731,10 @@ const actions = {
 }
 
 const getters = {
+  //nowChosedHeader
+  getNowChosedHeader: (state)=>{
+    return state.nowChosedHeader;
+  },
   //util
   getWSState: (state) => {
     let s = state.WSState == 1 ? 'connected' : 'disconnected'
@@ -2761,39 +2796,39 @@ const getters = {
     return state.CurrentChatKey
   },
   getMessages: (state) => {
-    if (state.Messages.length == 0) {
-      if (state.CurrentSession[0] == 'o') {
-        let SQL = `SELECT * FROM MESSAGES WHERE sour_address = '${state.CurrentSession}' OR dest_address = '${state.CurrentSession}' ORDER BY created_at DESC LIMIT 20`
-        state.DB.all(SQL, (err, items) => {
-          if (err) {
-            console.log(err)
-          } else {
-            items.reverse()
-            for (const item of items) {
-              let sour_address = state.Address
-              if (item.sour_address != null) {
-                sour_address = item.sour_address
+      if (state.Messages.length == 0) {
+        if (state.CurrentSession[0] == 'o') {
+          let SQL = `SELECT * FROM MESSAGES WHERE sour_address = '${state.CurrentSession}' OR dest_address = '${state.CurrentSession}' ORDER BY created_at DESC LIMIT 20`
+          state.DB.all(SQL, (err, items) => {
+            if (err) {
+              console.log(err)
+            } else {
+              items.reverse()
+              for (const item of items) {
+                let sour_address = state.Address
+                if (item.sour_address != null) {
+                  sour_address = item.sour_address
+                }
+                state.Messages.push({ 'address': sour_address, 'timestamp': item.timestamp, 'created_at': item.created_at, 'sequence': item.sequence, 'content': item.content, 'confirmed': item.confirmed, 'hash': item.hash })
               }
-              state.Messages.push({ 'address': sour_address, 'timestamp': item.timestamp, 'created_at': item.created_at, 'sequence': item.sequence, 'content': item.content, 'confirmed': item.confirmed, 'hash': item.hash })
+              return state.Messages
             }
-            return state.Messages
-          }
-        })
-      } else {
-        let SQL = `SELECT * FROM GROUP_MESSAGES WHERE group_hash = '${state.CurrentSession}' ORDER BY created_at DESC LIMIT 20`
-        state.DB.all(SQL, (err, items) => {
-          if (err) {
-            console.log(err)
-          } else {
-            items.reverse()
-            for (const item of items) {
-              state.Messages.push({ 'address': item.sour_address, 'timestamp': item.timestamp, 'created_at': item.created_at, 'sequence': item.sequence, 'content': item.content, 'hash': item.hash })
+          })
+        } else {
+          let SQL = `SELECT * FROM GROUP_MESSAGES WHERE group_hash = '${state.CurrentSession}' ORDER BY created_at DESC LIMIT 20`
+          state.DB.all(SQL, (err, items) => {
+            if (err) {
+              console.log(err)
+            } else {
+              items.reverse()
+              for (const item of items) {
+                state.Messages.push({ 'address': item.sour_address, 'timestamp': item.timestamp, 'created_at': item.created_at, 'sequence': item.sequence, 'content': item.content, 'hash': item.hash })
+              }
+              return state.Messages
             }
-            return state.Messages
-          }
-        })
+          })
+        }
       }
-    }
   },
   //bulletin board => BB
   currentBBSession() {

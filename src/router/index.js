@@ -80,6 +80,11 @@ export default new Router({
       component: require('@/components/GroupMember').default
     },
     {
+      path: '/AboutUs',
+      name: 'AboutUs',
+      component: require('@/components/AboutUs').default
+    },
+    {
       path: '*',
       redirect: '/'
     }
