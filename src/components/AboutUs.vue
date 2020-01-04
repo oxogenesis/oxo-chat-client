@@ -5,7 +5,7 @@
       <h1 class="bigTitle">关于<small>about</small></h1>
       <div class="aboutCompony">
         <p class="detail">
-          <strong>https://github.com/oxogenesis/oxo-chat-client</strong><br>
+          <button id="source">https://github.com/oxogenesis/oxo-chat-client</button><br>
           <strong>公告对标微博</strong><br>
           <strong>会话对标微信</strong><br>
           <strong>优势：</strong><br>
@@ -33,6 +33,8 @@
 import OuterHeader from './section/OuterHeader'
 import OuterFooter from './section/OuterFooter'
 
+const shell = window.require('electron').shell
+
 export default {
   data() {
     return {}
@@ -40,6 +42,12 @@ export default {
   components: {
     OuterFooter,
     OuterHeader
+  },
+  mounted() {
+    let sourceLink = document.getElementById('source')
+    sourceLink.addEventListener('click', (event) => {
+      shell.openExternal('https://github.com/oxogenesis/oxo-chat-client')
+    })
   }
 }
 

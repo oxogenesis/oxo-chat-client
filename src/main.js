@@ -38,5 +38,3 @@ new Vue({
   components: { App },
   template: '<App/>'
 })
-
-const electron = window.require('electron')

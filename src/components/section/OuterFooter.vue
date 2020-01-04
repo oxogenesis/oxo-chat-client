@@ -1,7 +1,7 @@
 <template>
   <div class="outer-footer">
     <footer>
-      <p>版本 0.0.5</p>
+      <p>版本 0.0.6</p>
       <p>@copyright 2019-2020</p>
       <p>
         <router-link class="links" to="AboutUs">关于</router-link>

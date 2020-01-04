@@ -1,3 +1,5 @@
+const ipcRenderer = window.require('electron').ipcRenderer
+
 import {
   encrypt,
   decrypt,
@@ -776,6 +778,12 @@ function SavePrivateMessage(sour_address, messageJson) {
           state.Sessions[i].updated_at = created_at
           state.Sessions.sort((a, b) => (a.updated_at < b.updated_at) ? 1 : -1)
 
+          //tray blink
+          console.log('ipcRenderer+++')
+          ipcRenderer.send('asynchronous-message', 'new-private-message')
+          console.log('ipcRenderer---')
+          console.log(ipcRenderer.sendSync('synchronous-message', 'ping'))
+
           //update db-message(confirmed)
           SQL = `UPDATE MESSAGES SET confirmed = true WHERE dest_address = '${sour_address}' AND hash IN (${Array2Str(messageJson.PairHash)})`
           state.DB.run(SQL, err => {
@@ -1264,6 +1272,8 @@ function SaveGroupMessage(address, messageJson) {
                           state.Sessions[i].updated_at = timestamp
                           state.Sessions.sort((a, b) => (a.updated_at < b.updated_at) ? 1 : -1)
 
+                          ipcRenderer.send('asynchronous-message', 'new-group-message')
+
                           if (jsonTmp.Confirm != null) {
                             //sync Confirm msg
                             SQL = `SELECT * FROM GROUP_MESSAGES WHERE hash = '${jsonTmp.Confirm.Hash}'`
@@ -1486,6 +1496,7 @@ function HandleGroupRequest(json) {
                     console.log(err)
                   } else {
                     state.GroupRequests.push({ "address": address, "group_hash": group.session, "timestamp": json.Timestamp, "json": strJson })
+                    ipcRenderer.send('asynchronous-message', 'new-group-request')
                   }
                 })
               } else {
@@ -1499,6 +1510,7 @@ function HandleGroupRequest(json) {
                       if (state.GroupRequests[i].address == address && state.GroupRequests[i].group_hash == group.session) {
                         state.GroupRequests[i].timestamp = json.Timestamp
                         state.GroupRequests[i].json = strJson
+                        ipcRenderer.send('asynchronous-message', 'update-group-request')
                         break
                       }
                     }
