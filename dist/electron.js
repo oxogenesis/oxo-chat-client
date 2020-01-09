@@ -85,7 +85,7 @@ function createWindow() {
   mainWindow.loadFile('index.html')
 
   // Open the DevTools.
-  //mainWindow.webContents.openDevTools()
+  // mainWindow.webContents.openDevTools()
 
   // Emitted when the window is closed.
   mainWindow.on('closed', function() {
@@ -130,7 +130,13 @@ ipcMain.on('asynchronous-message', function(event, arg) {
   console.log(arg)
   // 回应异步消息
   //event.sender.send('asynchronous-reply', 'pong')
-  if (appTray != null) {
+})
+
+ipcMain.on('synchronous-message', function(event, arg) {
+  console.log(arg)
+  // 回应同步消息
+  //event.returnValue = 'pong'
+  if (appTray != null && blinkJob == null) {
     let count = 0
     blinkJob = setInterval(function() {
       count++
@@ -141,10 +147,4 @@ ipcMain.on('asynchronous-message', function(event, arg) {
       }
     }, 500)
   }
-})
-
-ipcMain.on('synchronous-message', function(event, arg) {
-  console.log(arg)
-  // 回应同步消息
-  event.returnValue = 'pong'
 })

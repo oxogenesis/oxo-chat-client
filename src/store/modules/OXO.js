@@ -779,10 +779,7 @@ function SavePrivateMessage(sour_address, messageJson) {
           state.Sessions.sort((a, b) => (a.updated_at < b.updated_at) ? 1 : -1)
 
           //tray blink
-          console.log('ipcRenderer+++')
-          ipcRenderer.send('asynchronous-message', 'new-private-message')
-          console.log('ipcRenderer---')
-          console.log(ipcRenderer.sendSync('synchronous-message', 'ping'))
+          ipcRenderer.send('synchronous-message', 'new-private-message')
 
           //update db-message(confirmed)
           SQL = `UPDATE MESSAGES SET confirmed = true WHERE dest_address = '${sour_address}' AND hash IN (${Array2Str(messageJson.PairHash)})`
@@ -1272,7 +1269,7 @@ function SaveGroupMessage(address, messageJson) {
                           state.Sessions[i].updated_at = timestamp
                           state.Sessions.sort((a, b) => (a.updated_at < b.updated_at) ? 1 : -1)
 
-                          ipcRenderer.send('asynchronous-message', 'new-group-message')
+                          ipcRenderer.send('synchronous-message', 'new-group-message')
 
                           if (jsonTmp.Confirm != null) {
                             //sync Confirm msg
@@ -1496,7 +1493,7 @@ function HandleGroupRequest(json) {
                     console.log(err)
                   } else {
                     state.GroupRequests.push({ "address": address, "group_hash": group.session, "timestamp": json.Timestamp, "json": strJson })
-                    ipcRenderer.send('asynchronous-message', 'new-group-request')
+                    ipcRenderer.send('synchronous-message', 'new-group-request')
                   }
                 })
               } else {
@@ -1510,7 +1507,7 @@ function HandleGroupRequest(json) {
                       if (state.GroupRequests[i].address == address && state.GroupRequests[i].group_hash == group.session) {
                         state.GroupRequests[i].timestamp = json.Timestamp
                         state.GroupRequests[i].json = strJson
-                        ipcRenderer.send('asynchronous-message', 'update-group-request')
+                        ipcRenderer.send('synchronous-message', 'update-group-request')
                         break
                       }
                     }
