@@ -13,7 +13,7 @@
       </div>
     </div>
     <div class="message-textWrapper">
-      <div ref="content" :class="[{'message-confirm':message.confirmed}, 'message-text']"></div>
+      <div :class="[{'message-confirm':message.confirmed}, 'message-text']">{{message.content}}</div>
     </div>
   </li>
 </template>
@@ -46,6 +46,9 @@ export default {
     }
   },
   mounted() {
+    /*
+    //what the fuck!
+    console.log(`mounted#${this.message.sequence}#${this.message.content}`)
     let content = this.message.content
     if (content.length > 22 && content.substring(0, 22) == 'data:image/png;base64,') {
       let newImg = document.createElement("img")
@@ -56,6 +59,7 @@ export default {
       content = content.replace(/\r/ig, "").replace(/\n/ig, "<br>");
       this.$refs.content.innerHTML = content;
     }
+    */
   }
 }
 
