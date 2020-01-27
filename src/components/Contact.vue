@@ -46,7 +46,7 @@
               <li v-for="(follow,index) in this.$store.state.OXO.Follows" :key="index">
                 <el-tooltip content="Bottom center" placement="left" effect="light">
                   <div slot="content">
-                    {{getNameByAddress(follow)}}
+                    {{follow}}
                   </div>
                   <div class="contact-name-wrap">
                     <div class="contact-name">
@@ -66,7 +66,7 @@
               <li v-for="(friend,index) in this.$store.state.OXO.Friends" :key="index">
                 <el-tooltip content="Bottom center" placement="left" effect="light">
                   <div slot="content">
-                    {{getNameByAddress(friend)}}
+                    {{friend}}
                   </div>
                   <div class="contact-name-wrap">
                     <div class="contact-name">
@@ -75,6 +75,25 @@
                   </div>
                 </el-tooltip>
                 <el-button size="mini" type="danger" icon="el-icon-delete" @click="sureRemoveFriend(friend)">删除</el-button>
+              </li>
+            </ul>
+          </dd>
+        </dl>
+        <dl class="dllist">
+          <dt class="dl_title">未备注好友请求：</dt>
+          <dd class="dl_item">
+            <ul>
+              <li v-for="(stranger,index) in this.$store.state.OXO.Strangers" :key="index">
+                <el-tooltip content="Bottom center" placement="left" effect="light">
+                  <div slot="content">
+                    {{stranger.address}}
+                  </div>
+                  <div class="contact-name-wrap">
+                    <div class="contact-name">
+                      {{stranger.address}}
+                    </div>
+                  </div>
+                </el-tooltip>
               </li>
             </ul>
           </dd>

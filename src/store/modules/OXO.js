@@ -3,7 +3,7 @@ const ipcRenderer = window.require('electron').ipcRenderer
 import {
   encrypt,
   decrypt,
-  halfSHA512,
+  quarterSHA512,
   sign,
   verifySignature,
   DHSequence,
@@ -24,7 +24,7 @@ const fs = window.require('fs')
 const sqlite3 = window.require('sqlite3')
 
 //in memory of the creator of this project
-const GenesisHash = halfSHA512('obeTvR9XDbUwquA6JPQhmbgaCCaiFa2rvf')
+const GenesisHash = quarterSHA512('obeTvR9XDbUwquA6JPQhmbgaCCaiFa2rvf')
 const DefaultSelfName = 'Me'
 
 //RemoteHost:
@@ -55,6 +55,8 @@ const state = {
   CurrentMessageSequence: 0,
   CurrentMessageHash: GenesisHash,
   Messages: [],
+
+  Strangers: [],
 
   //bulletin board => BB
   //all => *
@@ -218,7 +220,7 @@ function SyncFollowBulletin(follow) {
 function SaveBulletin(bulletinJson) {
   let address = oxoKeyPairs.deriveAddress(bulletinJson.PublicKey)
   let strJson = JSON.stringify(bulletinJson)
-  let hash = halfSHA512(strJson)
+  let hash = quarterSHA512(strJson)
 
   if (VerifyJsonSignature(bulletinJson) == true) {
     if (state.Follows.includes(address)) {
@@ -269,12 +271,11 @@ function HandleBulletinRequest(json) {
     if (err) {
       console.log(err)
     } else {
-      let bulletin = {}
       if (item != null) {
-        bulletin = JSON.parse(item.json)
+        let bulletin = JSON.parse(item.json)
+        let strJson = GenObjectResponse(state.ObjectType.Bulletin, bulletin, address)
+        state.WS.send(strJson)
       }
-      let strJson = GenObjectResponse(state.ObjectType.Bulletin, bulletin, address)
-      state.WS.send(strJson)
     }
   })
 }
@@ -747,7 +748,7 @@ function SavePrivateMessage(sour_address, messageJson) {
       let content = decrypt(key, iv, messageJson.Content)
 
       let strJson = JSON.stringify(messageJson)
-      let hash = halfSHA512(strJson)
+      let hash = quarterSHA512(strJson)
       let created_at = Date.now()
 
       let readed = false
@@ -804,8 +805,14 @@ function SavePrivateMessage(sour_address, messageJson) {
 function HandleChatDH(json) {
   //check message from my friend
   let address = oxoKeyPairs.deriveAddress(json.PublicKey)
+  let timestamp = Date.now()
   if (!state.Friends.includes(address)) {
     console.log('message is not from my friend...')
+    //Strangers
+    while (state.Strangers.size >= 10) {
+      state.Strangers.shift()
+    }
+    state.Strangers.push({ "address": address, "created_at": timestamp })
     return
   }
 
@@ -815,7 +822,6 @@ function HandleChatDH(json) {
     if (err) {
       console.log(err)
     } else {
-      let timestamp = Date.now()
       let aesKey = ''
 
       if (item == null) {
@@ -1219,7 +1225,7 @@ function SaveGroupMessage(address, messageJson) {
                 }
               }
               let strJson = JSON.stringify(jsonAssemble)
-              let hash = halfSHA512(strJson)
+              let hash = quarterSHA512(strJson)
               let timestamp = Date.now()
 
               if (checkGroupMessageSchema(jsonAssemble)) {
@@ -1314,7 +1320,7 @@ function SaveGroupMessage(address, messageJson) {
 function SaveGroupManage(address, groupManageJson) {
   let group_address = oxoKeyPairs.deriveAddress(groupManageJson.PublicKey)
   let strJson = JSON.stringify(groupManageJson)
-  let hash = halfSHA512(strJson)
+  let hash = quarterSHA512(strJson)
 
   if (VerifyJsonSignature(groupManageJson) == false) {
     return
@@ -1549,7 +1555,7 @@ function HandleGroupRequest(json) {
                   let sig = sign(JSON.stringify(groupManageJson), state.PrivateKey)
                   groupManageJson.Signature = sig
                   let groupManageStr = JSON.stringify(groupManageJson)
-                  let hash = halfSHA512(groupManageStr)
+                  let hash = quarterSHA512(groupManageStr)
 
                   SQL = `INSERT INTO GROUP_MANAGES (group_hash, sequence, json, hash, created_at)
                             VALUES ('${group_hash}', ${gmanage.sequence + 1}, '${groupManageStr}', '${hash}', ${timestamp})`
@@ -1869,6 +1875,8 @@ const mutations = {
     state.CurrentMessageSequence = 0
     state.CurrentMessageHash = GenesisHash
     state.Messages = []
+
+    Strangers = []
 
     //BB
     state.BBSessions = []
@@ -2196,7 +2204,7 @@ const mutations = {
   CreateGroup(state, payload) {
     let timestamp = Date.now()
     let group_name = payload.group_name
-    let group_hash = halfSHA512(state.Address + timestamp.toString() + crypto.randomBytes(16).toString('hex'))
+    let group_hash = quarterSHA512(state.Address + timestamp.toString() + crypto.randomBytes(16).toString('hex'))
     group_hash = group_hash.substr(0, 32)
     let json = {
       "Action": state.ActionCode.GroupManage,
@@ -2210,7 +2218,7 @@ const mutations = {
     let sig = sign(JSON.stringify(json), state.PrivateKey)
     json.Signature = sig
     let strJson = JSON.stringify(json)
-    let hash = halfSHA512(strJson)
+    let hash = quarterSHA512(strJson)
     let SQL = `INSERT INTO GROUP_MANAGES (group_hash, sequence, json, hash, created_at)
         VALUES ('${group_hash}', 1, '${strJson}', '${hash}', ${timestamp})`
     state.DB.run(SQL, err => {
@@ -2344,7 +2352,7 @@ const mutations = {
                   let sig = sign(JSON.stringify(json), state.PrivateKey)
                   json.Signature = sig
                   let strJson = JSON.stringify(json)
-                  let hash = halfSHA512(strJson)
+                  let hash = quarterSHA512(strJson)
 
                   SQL = `INSERT INTO GROUP_MANAGES (group_hash, sequence, json, hash, created_at)
                       VALUES ('${group_hash}', ${gma.sequence + 1}, '${strJson}', '${hash}', ${timestamp})`
@@ -2447,7 +2455,7 @@ const mutations = {
                     let sig = sign(JSON.stringify(json), state.PrivateKey)
                     json.Signature = sig
                     let strJson = JSON.stringify(json)
-                    let hash = halfSHA512(strJson)
+                    let hash = quarterSHA512(strJson)
 
                     SQL = `INSERT INTO GROUP_MANAGES (group_hash, sequence, json, hash, created_at)
                       VALUES ('${group_hash}', ${gma.sequence + 1}, '${strJson}', '${hash}', ${timestamp})`
@@ -2563,7 +2571,7 @@ const actions = {
           let sig = sign(JSON.stringify(json), state.PrivateKey)
           json.Signature = sig
           let strJson = JSON.stringify(json)
-          let hash = halfSHA512(strJson)
+          let hash = quarterSHA512(strJson)
 
           //save message
           SQL = `INSERT INTO MESSAGES (dest_address, sequence, pre_hash, content, timestamp, json, created_at, readed, hash)
@@ -2641,7 +2649,7 @@ const actions = {
           json.Signature = sig
 
           let strJson = JSON.stringify(json)
-          let hash = halfSHA512(strJson)
+          let hash = quarterSHA512(strJson)
 
           //save message
           SQL = `INSERT INTO GROUP_MESSAGES (group_hash, sour_address, sequence, pre_hash, content, timestamp, json, created_at, hash, readed)
@@ -2722,7 +2730,7 @@ const actions = {
     let sig = sign(JSON.stringify(json), state.PrivateKey)
     json.Signature = sig
     let strJson = JSON.stringify(json)
-    let hash = halfSHA512(strJson)
+    let hash = quarterSHA512(strJson)
 
     //save bulletin
     let SQL = `INSERT INTO BULLETINS (address, sequence, pre_hash, content, timestamp, json, created_at, hash, quote_size)

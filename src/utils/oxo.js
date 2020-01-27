@@ -27,6 +27,10 @@ function halfSHA512(str) {
   return hasherSHA512(str).toUpperCase().substr(0, 64);
 }
 
+function quarterSHA512(str) {
+  return hasherSHA512(str).toUpperCase().substr(0, 32);
+}
+
 function strToHex(str) {
   let arr = [];
   let length = str.length;
@@ -71,6 +75,7 @@ export {
   encrypt,
   decrypt,
   halfSHA512,
+  quarterSHA512,
   sign,
   verifySignature,
   Epoch,
