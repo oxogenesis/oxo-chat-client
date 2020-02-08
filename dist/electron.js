@@ -6,7 +6,8 @@ const { app, BrowserWindow, Menu, Tray, ipcMain } = require('electron')
 let fs = require("fs")
 let path = require("path")
 
-//递归创建目录 异步方法  
+//递归创建目录 异步方法
+//recursive在10.14.1可以，在10.11上不可以
 function mkdirs(dirname, callback) {
   fs.exists(dirname, function(exists) {
     if (exists) {
@@ -19,7 +20,7 @@ function mkdirs(dirname, callback) {
   })
 }
 
-mkdirs("./db", function(ee) {
+mkdirs("./data/tmp", function(ee) {
   console.log(ee)
 })
 
