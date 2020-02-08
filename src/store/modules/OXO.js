@@ -13,19 +13,26 @@ import {
 import {
   checkJsonSchema,
   checkBulletinSchema,
+  checkBulletinFileSchema,
   checkGroupManageSchema,
   checkGroupRequestSchema,
-  checkGroupMessageSchema
+  checkGroupMessageSchema,
+  checkFileSchema
 } from '../../utils/json_schema.js'
 
 const crypto = require("crypto")
 const oxoKeyPairs = require("oxo-keypairs")
 const fs = window.require('fs')
 const sqlite3 = window.require('sqlite3')
+const path = window.require("path")
 
 //in memory of the creator of this project
 const GenesisHash = quarterSHA512('obeTvR9XDbUwquA6JPQhmbgaCCaiFa2rvf')
 const DefaultSelfName = 'Me'
+
+//file
+const ChunkSize = 64 * 1024
+
 
 //RemoteHost:
 //wss://ru.oxo-chat-server.com
@@ -82,19 +89,19 @@ const state = {
   //constant
   ActionCode: {
     "Declare": 200,
-    "Bulletin": 201,
-    "BulletinRequest": 202,
-    "ObjectResponse": 203,
-    "ChatDH": 204,
-    "ChatMessage": 205,
-    "ChatSync": 206,
+    "ObjectResponse": 201,
 
-    "GroupManage": 210,
-    "GroupRequest": 211,
-    "GroupManageSync": 212,
-    "GroupDH": 213,
-    "GroupMessage": 214,
-    "GroupMessageSync": 215
+    "BulletinRequest": 211,
+    "BulletinFileRequest": 212,
+
+    "ChatDH": 221,
+    "ChatMessage": 222,
+    "ChatSync": 223,
+
+    "GroupRequest": 231,
+    "GroupManageSync": 232,
+    "GroupDH": 233,
+    "GroupMessageSync": 234
   },
   DefaultDivision: 3,
 
@@ -118,9 +125,11 @@ const state = {
   },
 
   ObjectType: {
-    "Bulletin": 201,
-    "GroupManage": 202,
-    "GroupMessage": 203
+    "Bulletin": 111,
+    "BulletinFile": 112,
+
+    "GroupManage": 131,
+    "GroupMessage": 132
   },
 
   SessionType: {
@@ -146,6 +155,18 @@ const state = {
 function DelayExec(ms) {
   return new Promise(resolve => {
     setTimeout(resolve, ms);
+  })
+}
+
+function mkdirs(dirname, callback) {
+  fs.exists(dirname, function(exists) {
+    if (exists) {
+      callback()
+    } else {
+      mkdirs(path.dirname(dirname), function() {
+        fs.mkdir(dirname, callback)
+      })
+    }
   })
 }
 
@@ -201,6 +222,21 @@ function GenBulletinRequest(address, sequence, to) {
   return strJson
 }
 
+function GenBulletinFileRequest(sha1, chunk, to) {
+  let json = {
+    "Action": state.ActionCode.BulletinFileRequest,
+    "SHA1": sha1,
+    "CurrentChunk": chunk,
+    "To": to,
+    "Timestamp": Date.now(),
+    "PublicKey": state.PublicKey
+  }
+  let sig = sign(JSON.stringify(json), state.PrivateKey)
+  json.Signature = sig
+  let strJson = JSON.stringify(json)
+  return strJson
+}
+
 function SyncFollowBulletin(follow) {
   let SQL = `SELECT * FROM BULLETINS WHERE address = "${follow}" ORDER BY sequence DESC`
   state.DB.get(SQL, (err, item) => {
@@ -217,51 +253,278 @@ function SyncFollowBulletin(follow) {
   })
 }
 
-function SaveBulletin(bulletinJson) {
-  let address = oxoKeyPairs.deriveAddress(bulletinJson.PublicKey)
+function PublishBulletinContent(content, is_file) {
+  let timestamp = Date.now()
+  let tmpQuotes = []
+  for (let i = state.Quotes.length - 1; i >= 0; i--) {
+    let quote = { "Address": state.Quotes[i].Address, "Sequence": state.Quotes[i].Sequence, "Hash": state.Quotes[i].Hash }
+    tmpQuotes.push(quote)
+  }
+  state.Quotes = []
+  let json = {
+    "Action": state.ObjectType.Bulletin,
+    "Sequence": state.CurrentBulletinSequence + 1,
+    "PreHash": state.CurrentBulletinHash,
+    "Quote": tmpQuotes,
+    "Content": content,
+    "Timestamp": timestamp,
+    "PublicKey": state.PublicKey
+  }
+  let sig = sign(JSON.stringify(json), state.PrivateKey)
+  json.Signature = sig
+  let strJson = JSON.stringify(json)
+  let hash = quarterSHA512(strJson)
+
+  let file_saved = false
+  let fileJson = null
+  let fileSHA1 = null
+  if (is_file) {
+    fileJson = JSON.parse(content)
+    file_saved = true
+    fileSHA1 = fileJson["SHA1"]
+  }
+  //save bulletin
+  let SQL = `INSERT INTO BULLETINS (address, sequence, pre_hash, content, timestamp, json, created_at, hash, quote_size, is_file, file_saved, file_sha1)
+      VALUES ('${state.Address}', ${state.CurrentBulletinSequence + 1}, '${state.CurrentBulletinHash}', '${content}', ${timestamp}, '${strJson}', ${timestamp}, '${hash}', ${tmpQuotes.length}, ${is_file}, ${file_saved}, '${fileSHA1}')`
+
+  state.DB.run(SQL, err => {
+    if (err) {
+      console.log(err)
+    } else {
+      if (is_file) {
+        state.Bulletins.unshift({ "address": state.Address, "timestamp": timestamp, "created_at": timestamp, 'sequence': state.CurrentBulletinSequence + 1, "is_file": is_file, "file_saved": file_saved, "file": fileJson, 'hash': hash, 'quote_size': tmpQuotes.length })
+      } else {
+        state.Bulletins.unshift({ "address": state.Address, "timestamp": timestamp, "created_at": timestamp, 'sequence': state.CurrentBulletinSequence + 1, "content": content, 'hash': hash, 'quote_size': tmpQuotes.length })
+      }
+      state.CurrentBulletinSequence += 1
+      state.CurrentBulletinHash = hash
+    }
+  })
+}
+
+function SaveContentBulletin(SQL, objectAddress, bulletinJson, timestamp, hash) {
+  if (state.Follows.includes(objectAddress)) {
+    //bulletin from follow
+    //save bulletin
+    state.DB.run(SQL, err => {
+      if (err) {
+        console.log(err)
+      } else {
+        if (state.CurrentBBSession == "*" || state.CurrentBBSession == objectAddress) {
+          state.Bulletins.unshift({ "address": objectAddress, "name": state.Contacts[objectAddress], "timestamp": bulletinJson.Timestamp, "created_at": timestamp, 'sequence': bulletinJson.Sequence, "content": bulletinJson.Content, 'hash': hash, 'quote_size': bulletinJson.Quote.length })
+        }
+        let strJson = GenBulletinRequest(objectAddress, bulletinJson.Sequence + 1, objectAddress)
+        state.WS.send(strJson)
+      }
+    })
+  } else if (state.DisplayQuotes.filter(q => q.hash === hash).length == 1) {
+    //bulletin from quote
+    //save bulletin
+    state.DB.run(SQL, err => {
+      if (err) {
+        console.log(err)
+      } else {
+        for (let i = state.DisplayQuotes.length - 1; i >= 0; i--) {
+          if (hash == state.DisplayQuotes[i].hash) {
+            state.DisplayQuotes[i].timestamp = bulletinJson.Timestamp
+            state.DisplayQuotes[i].created_at = timestamp
+            state.DisplayQuotes[i].quote_size = bulletinJson.Quote.length
+            state.DisplayQuotes[i].content = bulletinJson.Content
+          }
+        }
+      }
+    })
+  }
+}
+
+function SaveFileBulletin(SQL, objectAddress, bulletinJson, timestamp, hash, is_file, file_saved, fileJson, relay1_address) {
+  if (state.Follows.includes(objectAddress)) {
+    //bulletin from follow
+    //save bulletin
+    state.DB.run(SQL, err => {
+      if (err) {
+        console.log(err)
+      } else {
+        if (state.CurrentBBSession == "*" || state.CurrentBBSession == objectAddress) {
+          state.Bulletins.unshift({ "address": objectAddress, "name": state.Contacts[objectAddress], "timestamp": bulletinJson.Timestamp, "created_at": timestamp, 'sequence': bulletinJson.Sequence, 'is_file': is_file, 'file_saved': file_saved, 'file': fileJson, 'relay1_address': relay1_address, 'hash': hash, 'quote_size': bulletinJson.Quote.length })
+        }
+        let strJson = GenBulletinRequest(objectAddress, bulletinJson.Sequence + 1, objectAddress)
+        state.WS.send(strJson)
+      }
+    })
+  } else if (state.DisplayQuotes.filter(q => q.hash === hash).length == 1) {
+    //bulletin from quote
+    //save bulletin
+    state.DB.run(SQL, err => {
+      if (err) {
+        console.log(err)
+      } else {
+        for (let i = state.DisplayQuotes.length - 1; i >= 0; i--) {
+          if (hash == state.DisplayQuotes[i].hash) {
+            state.DisplayQuotes[i].timestamp = bulletinJson.Timestamp
+            state.DisplayQuotes[i].created_at = timestamp
+            state.DisplayQuotes[i].quote_size = bulletinJson.Quote.length
+            state.DisplayQuotes[i].is_file = is_file
+            state.DisplayQuotes[i].file_saved = file_saved
+            state.DisplayQuotes[i].relay1_address = relay1_address
+            state.DisplayQuotes[i].file = fileJson
+          }
+        }
+      }
+    })
+  }
+}
+
+function SaveBulletin(relay1Address, bulletinJson) {
+  let objectAddress = oxoKeyPairs.deriveAddress(bulletinJson.PublicKey)
   let strJson = JSON.stringify(bulletinJson)
   let hash = quarterSHA512(strJson)
 
   if (VerifyJsonSignature(bulletinJson) == true) {
-    if (state.Follows.includes(address)) {
-      //bulletin from follow
-      let timestamp = Date.now()
-      //save bulletin
-      let SQL = `INSERT INTO BULLETINS (address, sequence, pre_hash, content, timestamp, json, created_at, hash, quote_size)
-                VALUES ('${address}', ${bulletinJson.Sequence}, '${bulletinJson.PreHash}', '${bulletinJson.Content}', '${bulletinJson.Timestamp}', '${strJson}', ${timestamp}, '${hash}', ${bulletinJson.Quote.length})`
-      state.DB.run(SQL, err => {
-        if (err) {
-          console.log(err)
-        } else {
-          if (state.CurrentBBSession == "*" || state.CurrentBBSession == address) {
-            state.Bulletins.unshift({ "address": address, "name": state.Contacts[address], "timestamp": bulletinJson.Timestamp, "created_at": timestamp, 'sequence': bulletinJson.Sequence, "content": bulletinJson.Content, 'hash': hash, 'quote_size': bulletinJson.Quote.length })
-          }
-          let strJson = GenBulletinRequest(address, bulletinJson.Sequence + 1, address)
-          state.WS.send(strJson)
-        }
-      })
-    } else if (state.DisplayQuotes.filter(q => q.hash === hash).length == 1) {
-      //bulletin from quote
-      let timestamp = Date.now()
-      //save bulletin
-      let SQL = `INSERT INTO BULLETINS (address, sequence, pre_hash, content, timestamp, json, created_at, hash, quote_size)
-                VALUES ('${address}', ${bulletinJson.Sequence}, '${bulletinJson.PreHash}', '${bulletinJson.Content}', '${bulletinJson.Timestamp}', '${strJson}', ${timestamp}, '${hash}', ${bulletinJson.Quote.length})`
-      state.DB.run(SQL, err => {
-        if (err) {
-          console.log(err)
-        } else {
-          for (let i = state.DisplayQuotes.length - 1; i >= 0; i--) {
-            if (hash == state.DisplayQuotes[i].hash) {
-              state.DisplayQuotes[i].timestamp = bulletinJson.Timestamp
-              state.DisplayQuotes[i].created_at = timestamp
-              state.DisplayQuotes[i].content = bulletinJson.Content
-              state.DisplayQuotes[i].quote_size = bulletinJson.Quote.length
+    let timestamp = Date.now()
+
+    //check is_file?
+    let is_file = false
+    let file_saved = false
+    let fileJson = null
+    let fileSHA1 = null
+
+    let SQL = `INSERT INTO BULLETINS (address, sequence, pre_hash, content, timestamp, json, created_at, hash, quote_size, is_file, file_saved, file_sha1, relay1_address)
+      VALUES ('${objectAddress}', ${bulletinJson.Sequence}, '${bulletinJson.PreHash}', '${bulletinJson.Content}', '${bulletinJson.Timestamp}', '${strJson}', ${timestamp}, '${hash}', ${bulletinJson.Quote.length}, ${is_file}, ${file_saved}, '${fileSHA1}', '${relay1Address}')`
+    try {
+      fileJson = JSON.parse(bulletinJson.Content)
+      //is a json
+      if (checkFileSchema(fileJson)) {
+        //is a file json
+        is_file = true
+        fileSHA1 = fileJson["SHA1"]
+        let fileSQL = `SELECT * FROM FILES WHERE sha1 = "${fileJson.SHA1}" AND saved = true`
+        state.DB.get(fileSQL, (err, item) => {
+          if (err) {
+            //never go here
+            console.log(err)
+          } else {
+            if (item != null) {
+              file_saved = true
             }
+            //update sql
+            SQL = `INSERT INTO BULLETINS (address, sequence, pre_hash, content, timestamp, json, created_at, hash, quote_size, is_file, file_saved, file_sha1, relay1_address)
+              VALUES ('${objectAddress}', ${bulletinJson.Sequence}, '${bulletinJson.PreHash}', '${bulletinJson.Content}', '${bulletinJson.Timestamp}', '${strJson}', ${timestamp}, '${hash}', ${bulletinJson.Quote.length}, ${is_file}, ${file_saved}, '${fileSHA1}', '${relay1Address}')`
+            SaveFileBulletin(SQL, objectAddress, bulletinJson, timestamp, hash, is_file, file_saved, fileJson, relay1Address)
           }
-        }
-      })
+        })
+      } else {
+        //not a file json, bulletin is a plain-string bulletin
+        SaveContentBulletin(SQL, objectAddress, bulletinJson, timestamp, hash)
+      }
+    } catch (e) {
+      console.log(e)
+      //not a json, bulletin is a plain-string bulletin
+      SaveContentBulletin(SQL, objectAddress, bulletinJson, timestamp, hash)
     }
   }
+}
+
+function SaveBulletinFileChunk(fileJson, flag, fileChunk, relay1_address) {
+  let filePath = `./data/${state.Address}/${fileJson.SHA1.substr(0,3)}/${fileJson.SHA1.substr(3,3)}/${fileJson.SHA1}`
+  let ws = fs.createWriteStream(filePath, {
+    flags: flag,
+    start: fileJson.Chunk * ChunkSize
+  })
+  ws.on('finish', function() {
+    let SQL = `UPDATE FILES SET current_chunk = ${fileJson.Chunk} WHERE sha1 = "${fileJson.SHA1}"`
+    state.DB.run(SQL, err => {
+      if (err) {
+        console.log(err)
+      } else {
+        //file chunk saved
+        //console.log(`FileChunkSaved#${fileJson.Chunk}/${fileChunk}`)
+        if (fileJson.Chunk + 1 == fileChunk) {
+          //file saved
+          let sha1Hasher = crypto.createHash("sha1")
+          let stream = fs.createReadStream(filePath)
+          stream.on('data', function(chunk) {
+            sha1Hasher.update(chunk)
+          })
+          stream.on('end', function() {
+            let sha1 = sha1Hasher.digest('hex').toUpperCase()
+            //check sha1
+            if (sha1 == fileJson.SHA1) {
+              //verify ok
+              SQL = `UPDATE FILES SET saved = true WHERE sha1 = "${fileJson.SHA1}"`
+              state.DB.run(SQL, err => {
+                if (err) {
+                  console.log(err)
+                } else {
+                  SQL = `UPDATE BULLETINS SET file_saved = true WHERE file_sha1 = "${fileJson.SHA1}"`
+                  state.DB.run(SQL, err => {
+                    if (err) {
+                      console.log(err)
+                    } else {
+                      //update bulletin file button
+                      for (let i = state.Bulletins.length - 1; i >= 0; i--) {
+                        if (state.Bulletins[i].is_file == true && fileJson.SHA1 == state.Bulletins[i].file.SHA1) {
+                          state.Bulletins[i].file_saved = true
+                        }
+                      }
+                      for (let i = state.DisplayQuotes.length - 1; i >= 0; i--) {
+                        if (state.DisplayQuotes[i].is_file == true && fileJson.SHA1 == state.DisplayQuotes[i].file.SHA1) {
+                          state.DisplayQuotes[i].file_saved = true
+                        }
+                      }
+                    }
+                  })
+                }
+              })
+            } else {
+              //verify fail, remove
+              fs.unlink(filePath, function(err) {
+                if (err) {
+                  throw err;
+                }
+                console.log('文件:' + filePath + '删除成功！');
+              })
+            }
+          })
+        } else {
+          //fetch next chunk
+          let strJson = GenBulletinFileRequest(fileJson.SHA1, fileJson.Chunk, relay1_address)
+          state.WS.send(strJson)
+        }
+      }
+    })
+  })
+  ws.on('error', function(err) {
+    console.log(err.stack)
+  })
+  ws.write(Buffer.from(fileJson.Content, 'base64'), null)
+  ws.end()
+}
+
+function SaveBulletinFile(relay1_address, fileJson) {
+  let SQL = `SELECT * FROM FILES WHERE sha1 = "${fileJson.SHA1}"`
+  state.DB.get(SQL, (err, item) => {
+    if (err) {
+      //never go here
+      console.log(err)
+    } else {
+      if (item != null && item.saved == false && item.current_chunk + 1 == fileJson.Chunk) {
+        if (fileJson.Chunk == 0) {
+          let flag = 'w'
+          mkdirs(`./data/${state.Address}/${fileJson.SHA1.substr(0,3)}/${fileJson.SHA1.substr(3,3)}/`, (err) => {
+            if (err) {
+              throw err
+            } else {
+              SaveBulletinFileChunk(fileJson, flag, item.chunk, relay1_address)
+            }
+          })
+        } else {
+          let flag = 'r+'
+          SaveBulletinFileChunk(fileJson, flag, item.chunk, relay1_address)
+        }
+      }
+    }
+  })
 }
 
 function HandleBulletinRequest(json) {
@@ -280,10 +543,85 @@ function HandleBulletinRequest(json) {
   })
 }
 
+function HandleBulletinFileRequest(json) {
+  let address = oxoKeyPairs.deriveAddress(json.PublicKey)
+  let SQL = `SELECT * FROM BULLETINS WHERE file_sha1 = "${json.SHA1}" AND file_saved = true ORDER BY sequence DESC`
+  state.DB.get(SQL, (err, item) => {
+    if (err) {
+      console.log(err)
+    } else {
+      if (item != null) {
+        let fileJson = JSON.parse(item.content)
+
+        let readChunkCursor = json.CurrentChunk + 1
+        let chunkBegin = readChunkCursor * ChunkSize
+        if (fileJson.Chunk <= readChunkCursor) {
+          return
+        }
+
+        let chunkEnd = readChunkCursor * ChunkSize + ChunkSize - 1
+        if (readChunkCursor + 1 == fileJson.Chunk) {
+          //last chunk
+          chunkEnd = fileJson.Size - 1
+        }
+
+        let file_path = `./data/${state.Address}/${json.SHA1.substr(0,3)}/${json.SHA1.substr(3,3)}/${json.SHA1}`
+        let rs = fs.createReadStream(file_path, {
+          highWaterMark: ChunkSize,
+          start: chunkBegin, //读取文件开始位置
+          end: chunkEnd //流是闭合区间 包含start也含end
+        })
+        let tmpBuffer = null
+        let tmpBufferLength = 0
+        rs.on("open", () => {
+          //console.log("rs open")
+        })
+        rs.on('data', (data) => {
+          //console.log(`#data:${data.length}`)
+          if (tmpBuffer == null) {
+            tmpBuffer = data
+            tmpBufferLength = data.length
+          } else {
+            tmpBufferLength = tmpBufferLength + data.length
+            tmpBuffer = Buffer.concat([Buffer.from(tmpBuffer), Buffer.from(data)], tmpBufferLength)
+          }
+          //console.log(`data:${typeof(data)}`)
+          //console.log(`tmpBuffer:${typeof(tmpBuffer)}`)
+          //console.log(`#tmpBuffer:${tmpBuffer.length}`)
+          if (tmpBuffer.length != chunkEnd + 1 - chunkBegin) {
+            return
+          } else {
+            let base64 = tmpBuffer.toString('base64')
+            //console.log(`#${readChunkCursor}:${base64.length}`)
+            let chunkJson = {
+              "Action": state.ObjectType.BulletinFile,
+              "SHA1": json.SHA1,
+              "Chunk": readChunkCursor,
+              "Content": base64
+            }
+            let strJson = GenObjectResponse(state.ObjectType.BulletinFile, chunkJson, address)
+            state.WS.send(strJson)
+            readChunkCursor = readChunkCursor + 1
+          }
+        })
+        rs.on("err", () => {
+          //console.log("rs err")
+        })
+        rs.on('end', () => {
+          //console.log("rs end")
+        })
+        rs.on("close", () => {
+          //console.log("rs close")
+        })
+      }
+    }
+  })
+}
+
 //db
 function InitDB(address) {
   //建库：数据库名为账号地址
-  state.DB = new sqlite3.Database(`./db/${address}.db`)
+  state.DB = new sqlite3.Database(`./data/${address}.db`)
   //建表
   state.DB.serialize(() => {
     //为账号地址起名
@@ -365,7 +703,11 @@ function InitDB(address) {
         content TEXT,
         timestamp INTEGER,
         created_at INTEGER,
-        json TEXT
+        json TEXT,
+        is_file BOOLEAN DEFAULT FALSE,
+        file_saved BOOLEAN DEFAULT FALSE,
+        file_sha1 VARCHAR(40),
+        relay1_address VARCHAR(35)
         )`, err => {
       if (err) {
         console.log(err)
@@ -443,6 +785,21 @@ function InitDB(address) {
         created_at INTEGER,
         json TEXT,
         readed BOOLEAN DEFAULT FALSE
+        )`, err => {
+      if (err) {
+        console.log(err)
+      }
+    })
+
+    state.DB.run(`CREATE TABLE IF NOT EXISTS FILES(
+        sha1 VARCHAR(40) PRIMARY KEY,
+        name TEXT NOT NULL,
+        ext TEXT NOT NULL,
+        size INTEGER NOT NULL,
+        chunk INTEGER NOT NULL,
+        current_chunk INTEGER DEFAULT -1,
+        saved BOOLEAN DEFAULT false,
+        created_at INTEGER
         )`, err => {
       if (err) {
         console.log(err)
@@ -1202,7 +1559,7 @@ function SaveGroupMessage(address, messageJson) {
               let jsonAssemble = null
               if (jsonTmp.Confirm != null) {
                 jsonAssemble = {
-                  "Action": state.ActionCode.GroupMessage,
+                  "Action": state.ObjectType.GroupMessage,
                   "GroupHash": messageJson.GroupHash,
                   "Sequence": jsonTmp.Sequence,
                   "PreHash": jsonTmp.PreHash,
@@ -1214,7 +1571,7 @@ function SaveGroupMessage(address, messageJson) {
                 }
               } else {
                 jsonAssemble = {
-                  "Action": state.ActionCode.GroupMessage,
+                  "Action": state.ObjectType.GroupMessage,
                   "GroupHash": messageJson.GroupHash,
                   "Sequence": jsonTmp.Sequence,
                   "PreHash": jsonTmp.PreHash,
@@ -1543,7 +1900,7 @@ function HandleGroupRequest(json) {
                   //gen manage json
                   let timestamp = Date.now()
                   let groupManageJson = {
-                    "Action": state.ActionCode.GroupManage,
+                    "Action": state.ObjectType.GroupManage,
                     "GroupHash": group_hash,
                     "Sequence": gmanage.sequence + 1,
                     "PreHash": gmanage.hash,
@@ -1772,7 +2129,13 @@ function Conn() {
 
     // wait for messages
     state.WS.addEventListener('message', function(event) {
-      console.log('Received: ', event.data)
+      /*
+      if (event.data.length > 500) {
+        console.log('Received: ', event.data.substr(0, 500))
+      } else {
+        console.log('Received: ', event.data)
+      }
+      */
       let json = checkJsonSchema(event.data)
       if (json) {
         //check receiver is me
@@ -1794,11 +2157,15 @@ function Conn() {
           HandleChatSync(json)
         } else if (json.Action == state.ActionCode.BulletinRequest) {
           HandleBulletinRequest(json)
+        } else if (json.Action == state.ActionCode.BulletinFileRequest) {
+          HandleBulletinFileRequest(json)
         } else if (json.Action == state.ActionCode.ObjectResponse) {
           let address = oxoKeyPairs.deriveAddress(json.PublicKey)
           let objectJson = json.Object
           if (json.ObjectType == state.ObjectType.Bulletin && checkBulletinSchema(objectJson)) {
-            SaveBulletin(objectJson)
+            SaveBulletin(address, objectJson)
+          } else if (json.ObjectType == state.ObjectType.BulletinFile && checkBulletinFileSchema(objectJson)) {
+            SaveBulletinFile(address, objectJson)
           } else if (json.ObjectType == state.ObjectType.GroupManage && checkGroupManageSchema(objectJson)) {
             SaveGroupManage(address, objectJson)
           } else if (json.ObjectType == state.ObjectType.GroupMessage) {
@@ -1876,7 +2243,7 @@ const mutations = {
     state.CurrentMessageHash = GenesisHash
     state.Messages = []
 
-    Strangers = []
+    state.Strangers = []
 
     //BB
     state.BBSessions = []
@@ -2181,10 +2548,21 @@ const mutations = {
               } else {
                 if (item != null) {
                   //load from local db
-                  state.DisplayQuotes[i].timestamp = item.timestamp
-                  state.DisplayQuotes[i].created_at = item.created_at
-                  state.DisplayQuotes[i].content = item.content
-                  state.DisplayQuotes[i].quote_size = item.quote_size
+                  if (item.is_file) {
+                    let fileJson = JSON.parse(item.content)
+                    state.DisplayQuotes[i].timestamp = item.timestamp
+                    state.DisplayQuotes[i].created_at = item.created_at
+                    state.DisplayQuotes[i].quote_size = item.quote_size
+                    state.DisplayQuotes[i].is_file = item.is_file
+                    state.DisplayQuotes[i].file_saved = item.file_saved
+                    state.DisplayQuotes[i].relay1_address = item.relay1_address
+                    state.DisplayQuotes[i].file = fileJson
+                  } else {
+                    state.DisplayQuotes[i].timestamp = item.timestamp
+                    state.DisplayQuotes[i].created_at = item.created_at
+                    state.DisplayQuotes[i].quote_size = item.quote_size
+                    state.DisplayQuotes[i].content = item.content
+                  }
                 } else {
                   //fetch from quoter(who shoud have the original bulletin)
                   let strJson = GenBulletinRequest(state.DisplayQuotes[i].address, state.DisplayQuotes[i].sequence, payload.address)
@@ -2200,6 +2578,55 @@ const mutations = {
   HideQuote(state) {
     state.DisplayQuotes = []
   },
+  FetchFile(state, payload) {
+    let file = payload.file
+    let SQL = `SELECT * FROM FILES WHERE sha1 = "${file.SHA1}"`
+    state.DB.get(SQL, (err, item) => {
+      if (err) {
+        //never go here
+        console.log(err)
+      } else {
+        if (item != null) {
+          if (item.saved == true) {
+            //already saved
+            SQL = `UPDATE BULLETINS SET file_saved = true WHERE file_sha1 = "${file.SHA1}"`
+            state.DB.run(SQL, err => {
+              if (err) {
+                console.log(err)
+              } else {
+                //update bulletin file button
+                for (let i = state.Bulletins.length - 1; i >= 0; i--) {
+                  if (state.Bulletins[i].is_file == true && file.SHA1 == state.Bulletins[i].file.SHA1) {
+                    state.Bulletins[i].file_saved = true
+                  }
+                }
+                for (let i = state.DisplayQuotes.length - 1; i >= 0; i--) {
+                  if (state.DisplayQuotes[i].is_file == true && file.SHA1 == state.DisplayQuotes[i].file.SHA1) {
+                    state.DisplayQuotes[i].file_saved = true
+                  }
+                }
+              }
+            })
+          } else {
+            //not saved
+            let strJson = GenBulletinFileRequest(file.SHA1, item.current_chunk, payload.relay1_address)
+            state.WS.send(strJson)
+          }
+        } else {
+          SQL = `INSERT INTO FILES (sha1, name, ext, size, chunk, saved, current_chunk, created_at)
+            VALUES ('${file.SHA1}', '${file.Name}', '${file.Ext}', ${file.Size}, ${file.Chunk}, false, -1, ${Date.now()})`
+          state.DB.run(SQL, err => {
+            if (err) {
+              console.log(err)
+            } else {
+              let strJson = GenBulletinFileRequest(file.SHA1, -1, payload.relay1_address)
+              state.WS.send(strJson)
+            }
+          })
+        }
+      }
+    })
+  },
   //group
   CreateGroup(state, payload) {
     let timestamp = Date.now()
@@ -2207,7 +2634,7 @@ const mutations = {
     let group_hash = quarterSHA512(state.Address + timestamp.toString() + crypto.randomBytes(16).toString('hex'))
     group_hash = group_hash.substr(0, 32)
     let json = {
-      "Action": state.ActionCode.GroupManage,
+      "Action": state.ObjectType.GroupManage,
       "GroupHash": group_hash,
       "Sequence": 1,
       "PreHash": GenesisHash,
@@ -2340,7 +2767,7 @@ const mutations = {
                 if (gma != null) {
                   //gen manage json
                   let json = {
-                    "Action": state.ActionCode.GroupManage,
+                    "Action": state.ObjectType.GroupManage,
                     "GroupHash": group_hash,
                     "Sequence": gma.sequence + 1,
                     "PreHash": gma.hash,
@@ -2443,7 +2870,7 @@ const mutations = {
                   if (gma != null) {
                     //gen manage json
                     let json = {
-                      "Action": state.ActionCode.GroupManage,
+                      "Action": state.ObjectType.GroupManage,
                       "GroupHash": group_hash,
                       "Sequence": gma.sequence + 1,
                       "PreHash": gma.hash,
@@ -2603,8 +3030,6 @@ const actions = {
               })
             }
           })
-
-
         }
       })
 
@@ -2624,7 +3049,7 @@ const actions = {
           let json = null
           if (item == null) {
             json = {
-              "Action": state.ActionCode.GroupMessage,
+              "Action": state.ObjectType.GroupMessage,
               "GroupHash": group_hash,
               "Sequence": state.CurrentGroupMessageSequence + 1,
               "PreHash": state.CurrentGroupMessageHash,
@@ -2634,7 +3059,7 @@ const actions = {
             }
           } else {
             json = {
-              "Action": state.ActionCode.GroupMessage,
+              "Action": state.ObjectType.GroupMessage,
               "GroupHash": group_hash,
               "Sequence": state.CurrentGroupMessageSequence + 1,
               "PreHash": state.CurrentGroupMessageHash,
@@ -2711,39 +3136,57 @@ const actions = {
     SyncFollowBulletin(payload)
   },
   PublishBulletin({ commit }, payload) {
-    let timestamp = Date.now()
-    let tmpQuotes = []
-    for (let i = state.Quotes.length - 1; i >= 0; i--) {
-      let quote = { "Address": state.Quotes[i].Address, "Sequence": state.Quotes[i].Sequence, "Hash": state.Quotes[i].Hash }
-      tmpQuotes.push(quote)
-    }
-    state.Quotes = []
-    let json = {
-      "Action": state.ActionCode.Bulletin,
-      "Sequence": state.CurrentBulletinSequence + 1,
-      "PreHash": state.CurrentBulletinHash,
-      "Quote": tmpQuotes,
-      "Content": payload.content,
-      "Timestamp": timestamp,
-      "PublicKey": state.PublicKey
-    }
-    let sig = sign(JSON.stringify(json), state.PrivateKey)
-    json.Signature = sig
-    let strJson = JSON.stringify(json)
-    let hash = quarterSHA512(strJson)
-
-    //save bulletin
-    let SQL = `INSERT INTO BULLETINS (address, sequence, pre_hash, content, timestamp, json, created_at, hash, quote_size)
-      VALUES ('${state.Address}', ${state.CurrentBulletinSequence + 1}, '${state.CurrentBulletinHash}', '${payload.content}', ${timestamp}, '${strJson}', ${timestamp}, '${hash}', ${tmpQuotes.length})`
-
-    state.DB.run(SQL, err => {
-      if (err) {
-        console.log(err)
-      } else {
-        state.Bulletins.unshift({ "address": state.Address, "timestamp": timestamp, "created_at": timestamp, 'sequence': state.CurrentBulletinSequence + 1, "content": payload.content, 'hash': hash, 'quote_size': tmpQuotes.length })
-        state.CurrentBulletinSequence += 1
-        state.CurrentBulletinHash = hash
-      }
+    PublishBulletinContent(payload.content, false)
+  },
+  PublishBulletinFile({ commit }, payload) {
+    //base=name+ext
+    let fileName = payload.pathJson["name"]
+    let fileExt = payload.pathJson["ext"]
+    let fileSize = payload.size
+    let fileChunk = Math.ceil(fileSize / ChunkSize)
+    let sha1Hasher = crypto.createHash("sha1")
+    let stream = fs.createReadStream(payload.fileToPublish)
+    stream.on('data', function(chunk) {
+      sha1Hasher.update(chunk)
+      //ing效果开始
+    })
+    stream.on('end', function() {
+      let sha1 = sha1Hasher.digest('hex').toUpperCase()
+      let fileJson = { "Name": fileName, "Ext": fileExt, "Size": fileSize, "Chunk": fileChunk, "SHA1": sha1 }
+      let SQL = `SELECT * FROM FILES WHERE sha1 = "${sha1}" AND saved = true`
+      state.DB.get(SQL, (err, item) => {
+        if (err) {
+          console.log(err)
+        } else {
+          if (item != null) {
+            //file already exist
+            PublishBulletinContent(JSON.stringify(fileJson), true)
+          } else {
+            mkdirs(`./data/${state.Address}/${sha1.substr(0,3)}/${sha1.substr(3,3)}/`, (err) => {
+              if (err) {
+                throw err
+              } else {
+                fs.copyFile(payload.fileToPublish, `./data/${state.Address}/${sha1.substr(0,3)}/${sha1.substr(3,3)}/${sha1}`, (err) => {
+                  if (err) {
+                    throw err
+                  } else {
+                    //file saved
+                    let SQL = `INSERT INTO FILES (sha1, name, ext, size, chunk, saved, created_at)
+                      VALUES ('${sha1}', '${fileName}', '${fileExt}', ${fileSize}, ${fileChunk}, true, ${Date.now()})`
+                    state.DB.run(SQL, err => {
+                      if (err) {
+                        console.log(err)
+                      } else {
+                        PublishBulletinContent(JSON.stringify(fileJson), true)
+                      }
+                    })
+                  }
+                })
+              }
+            })
+          }
+        }
+      })
     })
   }
 }
@@ -2751,7 +3194,7 @@ const actions = {
 const getters = {
   //nowChosedHeader
   getNowChosedHeader: (state) => {
-    return state.nowChosedHeader;
+    return state.nowChosedHeader
   },
   //util
   getWSState: (state) => {
@@ -2873,7 +3316,12 @@ const getters = {
           console.log(err)
         } else {
           for (const item of items) {
-            state.Bulletins.push({ "address": item.address, 'timestamp': item.timestamp, 'created_at': item.created_at, 'sequence': item.sequence, 'content': item.content, 'hash': item.hash, 'quote_size': item.quote_size })
+            if (item.is_file) {
+              let fileJson = JSON.parse(item.content)
+              state.Bulletins.push({ "address": item.address, 'timestamp': item.timestamp, 'created_at': item.created_at, 'sequence': item.sequence, 'is_file': item.is_file, 'file_saved': item.file_saved, 'relay1_address': item.relay1_address, 'file': fileJson, 'hash': item.hash, 'quote_size': item.quote_size })
+            } else {
+              state.Bulletins.push({ "address": item.address, 'timestamp': item.timestamp, 'created_at': item.created_at, 'sequence': item.sequence, 'content': item.content, 'hash': item.hash, 'quote_size': item.quote_size })
+            }
           }
         }
       })

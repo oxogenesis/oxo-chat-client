@@ -20,6 +20,35 @@ let DeclareSchema = {
   }
 }
 
+let ObjectResponseSchema = {
+  "type": "object",
+  "required": ["Action", "ObjectType", "Object", "To", "Timestamp", "PublicKey", "Signature"],
+  "maxProperties": 7,
+  "properties": {
+    "Action": {
+      "type": "number"
+    },
+    "ObjectType": {
+      "type": "number"
+    },
+    "Object": {
+      "type": "object"
+    },
+    "To": {
+      "type": "string"
+    },
+    "Timestamp": {
+      "type": "number"
+    },
+    "PublicKey": {
+      "type": "string"
+    },
+    "Signature": {
+      "type": "string"
+    }
+  }
+}
+
 //>>>bulletin<<<
 let BulletinSchema = {
   "type": "object",
@@ -93,19 +122,39 @@ let BulletinRequestSchema = {
   }
 }
 
-let ObjectResponseSchema = {
+let BulletinFileSchema = {
   "type": "object",
-  "required": ["Action", "ObjectType", "Object", "To", "Timestamp", "PublicKey", "Signature"],
+  "required": ["Action", "SHA1", "Chunk", "Content"],
+  "maxProperties": 4,
+  "properties": {
+    "Action": {
+      "type": "number"
+    },
+    "SHA1": {
+      "type": "string"
+    },
+    "Chunk": {
+      "type": "number"
+    },
+    "Content": {
+      "type": "string"
+    }
+  }
+}
+
+let BulletinFileRequestSchema = {
+  "type": "object",
+  "required": ["Action", "SHA1", "CurrentChunk", "To", "Timestamp", "PublicKey", "Signature"],
   "maxProperties": 7,
   "properties": {
     "Action": {
       "type": "number"
     },
-    "ObjectType": {
-      "type": "number"
+    "SHA1": {
+      "type": "string"
     },
-    "Object": {
-      "type": "object"
+    "CurrentChunk": {
+      "type": "number"
     },
     "To": {
       "type": "string"
@@ -432,6 +481,29 @@ let GroupMessageSyncSchema = {
     }
   }
 }
+
+let FileSchema = {
+  "type": "object",
+  "required": ["Name", "Ext", "Size", "Chunk", "SHA1"],
+  "maxProperties": 5,
+  "properties": {
+    "Name": {
+      "type": "string"
+    },
+    "Ext": {
+      "type": "string"
+    },
+    "Size": {
+      "type": "number"
+    },
+    "Chunk": {
+      "type": "number"
+    },
+    "SHA1": {
+      "type": "string"
+    }
+  }
+}
 //end client schema
 
 var Ajv = require('ajv')
@@ -439,11 +511,15 @@ var ajv = new Ajv({ allErrors: true })
 
 //client
 var vDeclare = ajv.compile(DeclareSchema)
-var vBulletinRequestSchema = ajv.compile(BulletinRequestSchema)
 var vObjectResponseSchema = ajv.compile(ObjectResponseSchema)
+
+var vBulletinRequestSchema = ajv.compile(BulletinRequestSchema)
+var vBulletinFileRequestSchema = ajv.compile(BulletinFileRequestSchema)
+
 var vChatMessageSchema = ajv.compile(ChatMessageSchema)
 var vChatSyncSchema = ajv.compile(ChatSyncSchema)
 var vChatDHSchema = ajv.compile(ChatDHSchema)
+
 var vGroupManageSyncSchema = ajv.compile(GroupManageSyncSchema)
 var vGroupDHSchema = ajv.compile(GroupDHSchema)
 var vGroupMessageSyncSchema = ajv.compile(GroupMessageSyncSchema)
@@ -453,7 +529,7 @@ function checkJsonSchema(strJson) {
   if (typeof strJson == "string") {
     try {
       let json = JSON.parse(strJson)
-      if (vObjectResponseSchema(json) || vBulletinRequestSchema(json) || vChatMessageSchema(json) || vChatSyncSchema(json) || vChatDHSchema(json) || vDeclare(json) || vGroupManageSyncSchema(json) || vGroupDHSchema(json) || vGroupMessageSyncSchema(json) || vGroupRequestSchema(json)) {
+      if (vObjectResponseSchema(json) || vBulletinRequestSchema(json) || vBulletinFileRequestSchema(json) || vChatMessageSchema(json) || vChatSyncSchema(json) || vChatDHSchema(json) || vDeclare(json) || vGroupManageSyncSchema(json) || vGroupDHSchema(json) || vGroupMessageSyncSchema(json) || vGroupRequestSchema(json)) {
         return json
       } else {
         return false
@@ -472,10 +548,27 @@ function checkBulletinSchema(json) {
   //console.log(json)
   try {
     if (vBulletinSchema(json)) {
-      console.log(`bulletin schema ok`)
+      console.log(`Bulletin schema ok`)
       return true
     } else {
-      console.log(`bulletin schema invalid`)
+      console.log(`Bulletin schema invalid`)
+      return false
+    }
+  } catch (e) {
+    return false
+  }
+}
+
+var vBulletinFileSchema = ajv.compile(BulletinFileSchema)
+
+function checkBulletinFileSchema(json) {
+  //console.log(json)
+  try {
+    if (vBulletinFileSchema(json)) {
+      console.log(`BulletinFile schema ok`)
+      return true
+    } else {
+      console.log(`BulletinFile schema invalid`)
       return false
     }
   } catch (e) {
@@ -532,10 +625,28 @@ function checkGroupRequestSchema(json) {
   }
 }
 
+var vFileSchema = ajv.compile(FileSchema)
+
+function checkFileSchema(json) {
+  try {
+    if (vFileSchema(json)) {
+      console.log(`File schema ok`)
+      return true
+    } else {
+      console.log(`File schema invalid`)
+      return false
+    }
+  } catch (e) {
+    return false
+  }
+}
+
 module.exports = {
   checkJsonSchema,
   checkBulletinSchema,
+  checkBulletinFileSchema,
   checkGroupManageSchema,
   checkGroupRequestSchema,
-  checkGroupMessageSchema
+  checkGroupMessageSchema,
+  checkFileSchema
 }
