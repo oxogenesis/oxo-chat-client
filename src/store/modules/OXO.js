@@ -191,10 +191,9 @@ function VerifyJsonSignature(json) {
   }
 }
 
-function GenObjectResponse(objectType, object, to) {
+function GenObjectResponse(object, to) {
   let json = {
     "Action": state.ActionCode.ObjectResponse,
-    "ObjectType": objectType,
     "Object": object,
     "To": to,
     "Timestamp": Date.now(),
@@ -262,7 +261,7 @@ function PublishBulletinContent(content, is_file) {
   }
   state.Quotes = []
   let json = {
-    "Action": state.ObjectType.Bulletin,
+    "ObjectType": state.ObjectType.Bulletin,
     "Sequence": state.CurrentBulletinSequence + 1,
     "PreHash": state.CurrentBulletinHash,
     "Quote": tmpQuotes,
@@ -536,7 +535,7 @@ function HandleBulletinRequest(json) {
     } else {
       if (item != null) {
         let bulletin = JSON.parse(item.json)
-        let strJson = GenObjectResponse(state.ObjectType.Bulletin, bulletin, address)
+        let strJson = GenObjectResponse(bulletin, address)
         state.WS.send(strJson)
       }
     }
@@ -594,12 +593,12 @@ function HandleBulletinFileRequest(json) {
             let base64 = tmpBuffer.toString('base64')
             //console.log(`#${readChunkCursor}:${base64.length}`)
             let chunkJson = {
-              "Action": state.ObjectType.BulletinFile,
+              "ObjectType": state.ObjectType.BulletinFile,
               "SHA1": json.SHA1,
               "Chunk": readChunkCursor,
               "Content": base64
             }
-            let strJson = GenObjectResponse(state.ObjectType.BulletinFile, chunkJson, address)
+            let strJson = GenObjectResponse(chunkJson, address)
             state.WS.send(strJson)
             readChunkCursor = readChunkCursor + 1
           }
@@ -1401,7 +1400,7 @@ function SyncGroupMessage(group_hash, address, current_sequence, to) {
   state.WS.send(strJson)
 }
 
-function Broadcast2Group(objectType, group_hash, object) {
+function Broadcast2Group(group_hash, object) {
   let SQL = `SELECT * FROM GROUP_MEMBERS WHERE group_hash = '${group_hash}'`
   state.DB.all(SQL, (err, items) => {
     if (err) {
@@ -1409,7 +1408,7 @@ function Broadcast2Group(objectType, group_hash, object) {
     } else {
       for (const item of items) {
         if (item.address != state.Address) {
-          let strJson = GenObjectResponse(objectType, object, item.address)
+          let strJson = GenObjectResponse(object, item.address)
           state.WS.send(strJson)
         }
       }
@@ -1431,7 +1430,7 @@ function GenGroupMessage(msg_json, aes_key, to) {
 
   let msg = encrypt(key, iv, JSON.stringify(tmp_json))
 
-  let strMessage = GenObjectResponse(state.ObjectType.GroupMessage, { "GroupHash": group_hash, "PublicKey": publicKey, "Message": msg }, to)
+  let strMessage = GenObjectResponse({ "GroupHash": group_hash, "PublicKey": publicKey, "Message": msg }, to)
   return strMessage
 }
 
@@ -1559,7 +1558,7 @@ function SaveGroupMessage(address, messageJson) {
               let jsonAssemble = null
               if (jsonTmp.Confirm != null) {
                 jsonAssemble = {
-                  "Action": state.ObjectType.GroupMessage,
+                  "ObjectType": state.ObjectType.GroupMessage,
                   "GroupHash": messageJson.GroupHash,
                   "Sequence": jsonTmp.Sequence,
                   "PreHash": jsonTmp.PreHash,
@@ -1571,7 +1570,7 @@ function SaveGroupMessage(address, messageJson) {
                 }
               } else {
                 jsonAssemble = {
-                  "Action": state.ObjectType.GroupMessage,
+                  "ObjectType": state.ObjectType.GroupMessage,
                   "GroupHash": messageJson.GroupHash,
                   "Sequence": jsonTmp.Sequence,
                   "PreHash": jsonTmp.PreHash,
@@ -1697,7 +1696,7 @@ function SaveGroupManage(address, groupManageJson) {
       if (err) {
         console.log(err)
       } else {
-        if (gmanage == null && groupManageJson.Sequence == 1 && groupManageJson.SubAction == state.GroupManageActionCode.Create) {
+        if (gmanage == null && groupManageJson.Sequence == 1 && groupManageJson.GroupManageAction == state.GroupManageActionCode.Create) {
           //first group manage
           SQL = `INSERT INTO GROUP_MANAGES (group_hash, sequence, json, hash, created_at)
                       VALUES ('${groupManageJson.GroupHash}', ${groupManageJson.Sequence}, '${strJson}', '${hash}', ${groupManageJson.Timestamp})`
@@ -1735,7 +1734,7 @@ function SaveGroupManage(address, groupManageJson) {
                 console.log(err)
               } else {
                 let request = groupManageJson.Request
-                if (groupManageJson.SubAction == state.GroupManageActionCode.MemberApprove && checkGroupRequestSchema(request) && VerifyJsonSignature(request) == true) {
+                if (groupManageJson.GroupManageAction == state.GroupManageActionCode.MemberApprove && checkGroupRequestSchema(request) && VerifyJsonSignature(request) == true) {
                   let request_address = oxoKeyPairs.deriveAddress(request.PublicKey)
                   SQL = `INSERT INTO GROUP_MEMBERS (group_hash, address, joined_at)
                               VALUES ('${groupManageJson.GroupHash}', '${request_address}', ${groupManageJson.Timestamp})`
@@ -1763,7 +1762,7 @@ function SaveGroupManage(address, groupManageJson) {
                       }
                     }
                   })
-                } else if (groupManageJson.SubAction == state.GroupManageActionCode.MemberRelease && checkGroupRequestSchema(request) && VerifyJsonSignature(request) == true) {
+                } else if (groupManageJson.GroupManageAction == state.GroupManageActionCode.MemberRelease && checkGroupRequestSchema(request) && VerifyJsonSignature(request) == true) {
                   let request_address = oxoKeyPairs.deriveAddress(request.PublicKey)
                   SQL = `DELETE FROM GROUP_MEMBERS WHERE group_hash = '${groupManageJson.GroupHash}' AND address = '${request_address}'`
                   state.DB.run(SQL, err => {
@@ -1788,7 +1787,7 @@ function SaveGroupManage(address, groupManageJson) {
                       }
                     }
                   })
-                } else if (groupManageJson.SubAction == state.GroupManageActionCode.MemberRemove) {
+                } else if (groupManageJson.GroupManageAction == state.GroupManageActionCode.MemberRemove) {
                   SQL = `DELETE FROM GROUP_MEMBERS WHERE group_hash = '${groupManageJson.GroupHash}' AND address = '${request.Address}'`
                   state.DB.run(SQL, err => {
                     if (err) {
@@ -1835,7 +1834,7 @@ function HandleGroupRequest(json) {
 
   if (group != null) {
     //i am group founder
-    if (json.SubAction == state.GroupRequestActionCode.Join) {
+    if (json.GroupManageAction == state.GroupRequestActionCode.Join) {
       let SQL = `SELECT * FROM GROUP_MEMBERS WHERE group_hash = "${group.session}" AND address = '${address}'`
       state.DB.get(SQL, (err, gmember) => {
         if (err) {
@@ -1881,7 +1880,7 @@ function HandleGroupRequest(json) {
           }
         }
       })
-    } else if (json.SubAction == state.GroupRequestActionCode.Leave) {
+    } else if (json.GroupManageAction == state.GroupRequestActionCode.Leave) {
       let SQL = `SELECT * FROM GROUP_MEMBERS WHERE group_hash = "${group.session}" AND address = '${address}'`
       state.DB.get(SQL, (err, gmember) => {
         if (err) {
@@ -1900,11 +1899,11 @@ function HandleGroupRequest(json) {
                   //gen manage json
                   let timestamp = Date.now()
                   let groupManageJson = {
-                    "Action": state.ObjectType.GroupManage,
+                    "ObjectType": state.ObjectType.GroupManage,
                     "GroupHash": group_hash,
                     "Sequence": gmanage.sequence + 1,
                     "PreHash": gmanage.hash,
-                    "SubAction": state.GroupManageActionCode.MemberRelease,
+                    "GroupManageAction": state.GroupManageActionCode.MemberRelease,
                     "Request": json,
                     "Timestamp": timestamp,
                     "PublicKey": state.PublicKey
@@ -1964,7 +1963,7 @@ function HandleGroupManageSync(json) {
       for (const item of items) {
         DelayExec(s * MessageInterval).then(() => {
           let group_manage = JSON.parse(item.json)
-          let strJson = GenObjectResponse(state.ObjectType.GroupManage, group_manage, address)
+          let strJson = GenObjectResponse(group_manage, address)
           state.WS.send(strJson)
         })
         s = s + 1
@@ -2162,13 +2161,13 @@ function Conn() {
         } else if (json.Action == state.ActionCode.ObjectResponse) {
           let address = oxoKeyPairs.deriveAddress(json.PublicKey)
           let objectJson = json.Object
-          if (json.ObjectType == state.ObjectType.Bulletin && checkBulletinSchema(objectJson)) {
+          if (json.Object.ObjectType == state.ObjectType.Bulletin && checkBulletinSchema(objectJson)) {
             SaveBulletin(address, objectJson)
-          } else if (json.ObjectType == state.ObjectType.BulletinFile && checkBulletinFileSchema(objectJson)) {
+          } else if (json.Object.ObjectType == state.ObjectType.BulletinFile && checkBulletinFileSchema(objectJson)) {
             SaveBulletinFile(address, objectJson)
-          } else if (json.ObjectType == state.ObjectType.GroupManage && checkGroupManageSchema(objectJson)) {
+          } else if (json.Object.ObjectType == state.ObjectType.GroupManage && checkGroupManageSchema(objectJson)) {
             SaveGroupManage(address, objectJson)
-          } else if (json.ObjectType == state.ObjectType.GroupMessage) {
+          } else if (json.Object.ObjectType == state.ObjectType.GroupMessage) {
             SaveGroupMessage(address, objectJson)
           }
         } else if (json.Action == state.ActionCode.GroupRequest) {
@@ -2634,11 +2633,11 @@ const mutations = {
     let group_hash = quarterSHA512(state.Address + timestamp.toString() + crypto.randomBytes(16).toString('hex'))
     group_hash = group_hash.substr(0, 32)
     let json = {
-      "Action": state.ObjectType.GroupManage,
+      "ObjectType": state.ObjectType.GroupManage,
       "GroupHash": group_hash,
       "Sequence": 1,
       "PreHash": GenesisHash,
-      "SubAction": state.GroupManageActionCode.Create,
+      "GroupManageAction": state.GroupManageActionCode.Create,
       "Timestamp": timestamp,
       "PublicKey": state.PublicKey
     }
@@ -2683,7 +2682,7 @@ const mutations = {
     let json = {
       "Action": state.ActionCode.GroupRequest,
       "GroupHash": group_hash,
-      "SubAction": subaction,
+      "GroupManageAction": subaction,
       "To": group_address,
       "Timestamp": timestamp,
       "PublicKey": state.PublicKey
@@ -2767,11 +2766,11 @@ const mutations = {
                 if (gma != null) {
                   //gen manage json
                   let json = {
-                    "Action": state.ObjectType.GroupManage,
+                    "ObjectType": state.ObjectType.GroupManage,
                     "GroupHash": group_hash,
                     "Sequence": gma.sequence + 1,
                     "PreHash": gma.hash,
-                    "SubAction": state.GroupManageActionCode.MemberApprove,
+                    "GroupManageAction": state.GroupManageActionCode.MemberApprove,
                     "Request": JSON.parse(payload.json),
                     "Timestamp": timestamp,
                     "PublicKey": state.PublicKey
@@ -2787,7 +2786,7 @@ const mutations = {
                     if (err) {
                       console.log(err)
                     } else {
-                      let strResponse = GenObjectResponse(state.ObjectType.GroupManage, json, address)
+                      let strResponse = GenObjectResponse(json, address)
                       state.WS.send(strResponse)
 
                       SQL = `INSERT INTO GROUP_MEMBERS (group_hash, address, joined_at)
@@ -2870,11 +2869,11 @@ const mutations = {
                   if (gma != null) {
                     //gen manage json
                     let json = {
-                      "Action": state.ObjectType.GroupManage,
+                      "ObjectType": state.ObjectType.GroupManage,
                       "GroupHash": group_hash,
                       "Sequence": gma.sequence + 1,
                       "PreHash": gma.hash,
-                      "SubAction": state.GroupManageActionCode.MemberRemove,
+                      "GroupManageAction": state.GroupManageActionCode.MemberRemove,
                       "Request": { "Address": member_address },
                       "Timestamp": timestamp,
                       "PublicKey": state.PublicKey
@@ -2890,7 +2889,7 @@ const mutations = {
                       if (err) {
                         console.log(err)
                       } else {
-                        Broadcast2Group(state.ObjectType.GroupManage, group_hash, json)
+                        Broadcast2Group(group_hash, json)
 
                         SQL = `DELETE FROM GROUP_MEMBERS WHERE group_hash = '${group_hash}' AND address = '${member_address}'`
                         state.DB.run(SQL, err => {
@@ -3049,7 +3048,7 @@ const actions = {
           let json = null
           if (item == null) {
             json = {
-              "Action": state.ObjectType.GroupMessage,
+              "ObjectType": state.ObjectType.GroupMessage,
               "GroupHash": group_hash,
               "Sequence": state.CurrentGroupMessageSequence + 1,
               "PreHash": state.CurrentGroupMessageHash,
@@ -3059,7 +3058,7 @@ const actions = {
             }
           } else {
             json = {
-              "Action": state.ObjectType.GroupMessage,
+              "ObjectType": state.ObjectType.GroupMessage,
               "GroupHash": group_hash,
               "Sequence": state.CurrentGroupMessageSequence + 1,
               "PreHash": state.CurrentGroupMessageHash,

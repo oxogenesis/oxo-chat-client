@@ -22,13 +22,10 @@ let DeclareSchema = {
 
 let ObjectResponseSchema = {
   "type": "object",
-  "required": ["Action", "ObjectType", "Object", "To", "Timestamp", "PublicKey", "Signature"],
-  "maxProperties": 7,
+  "required": ["Action", "Object", "To", "Timestamp", "PublicKey", "Signature"],
+  "maxProperties": 6,
   "properties": {
     "Action": {
-      "type": "number"
-    },
-    "ObjectType": {
       "type": "number"
     },
     "Object": {
@@ -52,10 +49,10 @@ let ObjectResponseSchema = {
 //>>>bulletin<<<
 let BulletinSchema = {
   "type": "object",
-  "required": ["Action", "Sequence", "PreHash", "Quote", "Content", "Timestamp", "PublicKey", "Signature"],
+  "required": ["ObjectType", "Sequence", "PreHash", "Quote", "Content", "Timestamp", "PublicKey", "Signature"],
   "maxProperties": 8,
   "properties": {
-    "Action": {
+    "ObjectType": {
       "type": "number"
     },
     "Sequence": {
@@ -124,10 +121,10 @@ let BulletinRequestSchema = {
 
 let BulletinFileSchema = {
   "type": "object",
-  "required": ["Action", "SHA1", "Chunk", "Content"],
+  "required": ["ObjectType", "SHA1", "Chunk", "Content"],
   "maxProperties": 4,
   "properties": {
-    "Action": {
+    "ObjectType": {
       "type": "number"
     },
     "SHA1": {
@@ -278,7 +275,7 @@ let ChatDHSchema = {
 //group request
 let GroupRequestSchema = {
   "type": "object",
-  "required": ["Action", "GroupHash", "SubAction", "To", "Timestamp", "PublicKey", "Signature"],
+  "required": ["Action", "GroupHash", "GroupManageAction", "To", "Timestamp", "PublicKey", "Signature"],
   "maxProperties": 7,
   "properties": {
     "Action": {
@@ -289,7 +286,7 @@ let GroupRequestSchema = {
     },
     //leave:0
     //join:1
-    "SubAction": {
+    "GroupManageAction": {
       "type": "number"
     },
     "To": {
@@ -310,10 +307,10 @@ let GroupRequestSchema = {
 //group control for group admin
 let GroupManageSchema = {
   "type": "object",
-  "required": ["Action", "GroupHash", "Sequence", "PreHash", "SubAction", "Timestamp", "PublicKey", "Signature"],
+  "required": ["ObjectType", "GroupHash", "Sequence", "PreHash", "GroupManageAction", "Timestamp", "PublicKey", "Signature"],
   "maxProperties": 9,
   "properties": {
-    "Action": {
+    "ObjectType": {
       "type": "number"
     },
     "GroupHash": {
@@ -330,7 +327,7 @@ let GroupManageSchema = {
     //member approve:2   need Request
     //remove member:3    Request = {"Address":address}
     //member release:4   need Request
-    "SubAction": {
+    "GroupManageAction": {
       "type": "number"
     },
     "Request": {
@@ -411,10 +408,10 @@ let GroupDHSchema = {
 
 let GroupMessageSchema = {
   "type": "object",
-  "required": ["Action", "GroupHash", "Sequence", "PreHash", "Content", "Timestamp", "PublicKey", "Signature"],
+  "required": ["ObjectType", "GroupHash", "Sequence", "PreHash", "Content", "Timestamp", "PublicKey", "Signature"],
   "maxProperties": 9,
   "properties": {
-    "Action": {
+    "ObjectType": {
       "type": "number"
     },
     "GroupHash": {
