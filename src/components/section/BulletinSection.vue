@@ -16,8 +16,8 @@
             <el-input type="textarea" class="bulletin-composer" v-model="content"></el-input>
           </el-form-item>
           <el-form-item align="right">
-            <el-button size="mini" type="primary" @click="publishBulletin()">发布</el-button>
-            <el-button size="mini" type="primary" @click="publishBulletinFile()">发布文件</el-button>
+            <el-button size="mini" type="primary" @click="publishTextBulletin()">发布</el-button>
+            <el-button size="mini" type="primary" @click="publishFileBulletin()">发布文件</el-button>
           </el-form-item>
         </el-form>
       </div>
@@ -68,7 +68,7 @@ export default {
   },
   created() {},
   methods: {
-    publishBulletin() {
+    publishTextBulletin() {
       if (this.content.trim() == "") {
         this.$message({
           showClose: true,
@@ -80,7 +80,7 @@ export default {
       this.content = this.content.replace(/\r/ig, "").replace(/\n/ig, "<br>");
 
       this.$store.dispatch({
-        type: 'PublishBulletin',
+        type: 'PublishTextBulletin',
         content: this.content
       })
       this.content = ''
@@ -104,17 +104,17 @@ export default {
     changeShowEdit: function(onoff) {
       this.showEdit = onoff;
     },
-    publishBulletinFile() {
+    publishFileBulletin() {
       let self = this
       dialog.showOpenDialog({
         title: "浏览文件"
       }, filename => {
         try {
           let stats = fs.statSync(filename[0])
-          console.log(stats)
+          //console.log(stats)
           if (stats.isFile() && stats.size > 0) {
             let fileToPublish = filename[0]
-            console.log(fileToPublish)
+            //console.log(fileToPublish)
 
             let stats = fs.statSync(fileToPublish)
             if (stats.isFile() && stats.size > 0) {
@@ -122,12 +122,12 @@ export default {
               if (pathJson["ext"] == '.exe') {
                 self.$message({
                   showClose: true,
-                  message: '不是发布可执行文件',
+                  message: '不能发布可执行文件',
                   type: 'warning'
                 })
               } else {
                 self.$store.dispatch({
-                  type: 'PublishBulletinFile',
+                  type: 'PublishFileBulletin',
                   fileToPublish: fileToPublish,
                   pathJson: pathJson,
                   size: stats.size
@@ -145,10 +145,7 @@ export default {
           console.log(e)
         }
       })
-    },
-    ...mapActions({
-      switchBBSession: 'SwitchBBSession'
-    })
+    }
   }
 }
 

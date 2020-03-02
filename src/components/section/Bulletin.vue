@@ -13,7 +13,8 @@
       SHA1:{{bulletin.file.SHA1}}<br>
       <h5 v-show="bulletin.file_saved" class="bulletin-quote-link" @click="openFile(bulletin.file.SHA1)">[打开]</h5>
       <h5 v-show="bulletin.file_saved" class="bulletin-quote-link" @click="openDir(bulletin.file.SHA1)">[打开文件夹]</h5>
-      <h5 v-show="!bulletin.file_saved" class="bulletin-quote-link" @click="fetchFile(bulletin.file, bulletin.relay1_address)">[获取]</h5>
+      <h5 v-show="!bulletin.file_saved" class="bulletin-quote-link">{{bulletin.file_percent}}</h5>
+      <h5 v-show="!bulletin.file_saved" class="bulletin-quote-link" @click="fetchFile(bulletin.file, bulletin.relay_address)">[获取]</h5>
     </div>
     <div v-else class="bulletin-text" v-html="bulletin.content"></div>
   </li>
@@ -77,11 +78,11 @@ export default {
         }
       });
     },
-    fetchFile(file, relay1_address) {
+    fetchFile(file, relay_address) {
       this.$store.commit({
-        type: 'FetchFile',
+        type: 'FetchBulletinFile',
         file: file,
-        relay1_address: relay1_address
+        relay_address: relay_address
       })
     },
     ...mapActions({

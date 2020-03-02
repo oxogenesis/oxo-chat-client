@@ -11,8 +11,8 @@
         <el-input type="textarea" placeholder="按enter发送，shift+enter换行" class="message-composer" v-model="content" ref="sendTextarea"></el-input>
       </div>
       <div class="message-composer-bottom">
-        <img id="img" v-bind:src="imgSrc" width="494" onclick="this.src=''">
-        <el-button class="btnsend" size="mini" type="primary" @click="sendMessage()" ref="btnSend">{{btnSendText}}</el-button>
+        <el-button class="btnSendText" size="mini" type="primary" @click="sendTextMessage()" ref="btnSendText">{{btnSendText}}</el-button>
+        <el-button v-show="showSendFile" class="btnSendFile" size="mini" type="primary" @click="sendFileMessage()" ref="btnSendFile">{{btnSendFile}}</el-button>
       </div>
     </div>
   </div>
@@ -22,6 +22,11 @@ import Message from './Message.vue'
 import { mapActions, mapGetters } from 'vuex'
 import { DHSequence } from '../../utils/oxo.js'
 
+const remote = window.require('electron').remote
+const dialog = remote.dialog
+const fs = window.require("fs")
+const path = window.require("path")
+
 export default {
   name: 'MessageSection',
   components: { Message },
@@ -30,15 +35,17 @@ export default {
       content: '',
       lastMessage: null,
       btnSendText: "",
+      btnSendFile: "",
+      showSendFile: false,
       myAddress: this.$store.state.OXO.Address
     }
   },
   props: {},
   updated: function() {
     let len = this.$store.state.OXO.Messages.length,
-      newLastMessage = {};
+      newLastMessage = {}
     if (len > 0) {
-      newLastMessage = this.$store.state.OXO.Messages[len - 1];
+      newLastMessage = this.$store.state.OXO.Messages[len - 1]
     }
     if (this.lastMessage != newLastMessage) {
       this.lastMessage = newLastMessage
@@ -55,7 +62,7 @@ export default {
       getCurrentSession: 'getCurrentSession'
     }),
     messageData: function() {
-      return this.$store.state.OXO.Messages;
+      return this.$store.state.OXO.Messages
     }
   },
   mounted() {
@@ -71,63 +78,50 @@ export default {
       //private-chat
       if (this.$store.state.OXO.CurrentChatKey == '') {
         this.btnSendText = '协商密钥'
+        this.showSendFile = false
       } else {
         this.btnSendText = '发送'
+        this.btnSendFile = '发送文件'
+        this.showSendFile = true
       }
     } else {
       //group-chat
       this.btnSendText = '发送'
+      this.btnSendFile = '发送文件'
     }
 
     if (this.$store.state.OXO.WSState == 1) {
-      this.$refs.btnSend.disabled = false
+      this.$refs.btnSendText.disabled = false
+      this.$refs.btnSendFile.disabled = false
     } else {
-      this.$refs.btnSend.disabled = true
+      this.$refs.btnSendText.disabled = true
+      this.$refs.btnSendFile.disabled = true
     }
-
-    document.addEventListener('paste', function(e) {
-      if (!(e.clipboardData && e.clipboardData.items)) {
-        return
-      }
-      for (let i = 0, len = e.clipboardData.items.length; i < len; i++) {
-        let item = e.clipboardData.items[i]
-        if (item.kind === "file") {
-          let file = item.getAsFile()
-          let reader = new FileReader()
-          reader.onloadend = function(e) {
-            let img = document.querySelector("#img")
-            img.src = e.target.result
-          }
-          reader.readAsDataURL(file)
-        }
-      }
-    })
   },
   methods: {
     //enter或者ctr+enter提交，shift+enter换行
     addKeyBoaderEvent(event) {
       let sendTextarea = this.$refs.sendTextarea,
-        self = this;
+        self = this
       if (event.shiftKey && event.keyCode == 13) {
-        return false;
+        return false
       } else if (event.ctrlKey && event.keyCode == 13) {
-        event.returnValue = false;
-        self.sendMessage();
-        return false;
+        event.returnValue = false
+        self.sendTextMessage()
+        return false
       } else if (event.keyCode == 13) {
-        event.returnValue = false;
-        this.sendMessage();
-        return false;
+        event.returnValue = false
+        this.sendTextMessage()
+        return false
       }
     },
-    sendMessage() {
+    sendTextMessage() {
       if (this.$store.state.OXO.CurrentSession == '') {
         return
       }
 
       let timestamp = Date.now()
-      let img = document.querySelector("#img")
-      let self = this;
+      let self = this
       if (this.$store.state.OXO.CurrentSession[0] == 'o') {
         //private-chat
         if (this.btnSendText == '协商密钥') {
@@ -135,7 +129,7 @@ export default {
           self.$message({
             showClose: true,
             message: '如果10秒内无响应，说明对方不在线'
-          });
+          })
         } else if (this.btnSendText == '发送') {
           //check handshake
           let division = this.$store.state.OXO.DefaultDivision
@@ -146,87 +140,148 @@ export default {
             //或会话时间区间编号不符
             //则再次协商会话密钥
             this.btnSendText = '协商密钥'
+            this.showSendFile = false
             this.$store.commit('Handshake', this.$store.state.OXO.CurrentSession)
           } else {
-            //优先发送图片
-            if (img.src != '') {
-              this.$store.dispatch({
-                type: 'DeliverMessage',
-                timestamp: timestamp,
-                chatKey: this.$store.state.OXO.CurrentChatKey,
-                address: this.$store.state.OXO.CurrentSession,
-                content: img.src
-              })
-              img.src = ''
-
-              return
-            }
-
             if (this.content.trim() == "") {
               self.$message({
                 showClose: true,
                 message: '消息不能为空!',
                 type: 'warning'
-              });
+              })
             } else {
               let promise = this.$store.dispatch({
-                type: 'DeliverMessage',
+                type: 'DeliverTextMessage',
                 timestamp: timestamp,
                 chatKey: this.$store.state.OXO.CurrentChatKey,
                 address: this.$store.state.OXO.CurrentSession,
                 content: this.content
               })
               promise.then(() => {
-                this.content = '';
+                this.content = ''
                 const ul = this.$refs.list
-                ul.scrollTop = ul.scrollHeight;
+                ul.scrollTop = ul.scrollHeight
               })
             }
           }
         }
       } else {
         //group-chat
-
-        //优先发送图片
-        if (img.src != '') {
-          this.$store.dispatch({
-            type: 'DeliverGroupMessage',
-            timestamp: timestamp,
-            group_hash: this.$store.state.OXO.CurrentSession,
-            content: img.src
-          })
-          img.src = ''
-          return
-        }
-
         if (this.content.trim() == "") {
           self.$message({
             showClose: true,
             message: '消息不能为空!',
             type: 'warning'
-          });
+          })
         } else {
-
           let promise = this.$store.dispatch({
-            type: 'DeliverGroupMessage',
+            type: 'DeliverGroupTextMessage',
             timestamp: timestamp,
             group_hash: this.$store.state.OXO.CurrentSession,
             content: this.content
           })
           promise.then(() => {
-            this.content = '';
+            this.content = ''
             const ul = this.$refs.list
-            ul.scrollTop = ul.scrollHeight;
+            ul.scrollTop = ul.scrollHeight
           })
-
         }
       }
+    },
+    sendFileMessage() {
+      let self = this
+      dialog.showOpenDialog({
+        title: "浏览文件"
+      }, filename => {
+        try {
+          let stats = fs.statSync(filename[0])
+          //console.log(stats)
+          if (stats.isFile() && stats.size > 0) {
+            let fileToPublish = filename[0]
+            //console.log(fileToPublish)
 
+            let stats = fs.statSync(fileToPublish)
+            if (stats.isFile() && stats.size > 0) {
+              let pathJson = path.parse(fileToPublish)
+              if (pathJson["ext"] == '.exe') {
+                self.$message({
+                  showClose: true,
+                  message: '不能发生可执行文件',
+                  type: 'warning'
+                })
+              } else {
+                if (self.$store.state.OXO.CurrentSession == '') {
+                  return
+                }
+
+                let timestamp = Date.now()
+                if (self.$store.state.OXO.CurrentSession[0] == 'o') {
+                  //private-chat
+                  if (self.btnSendText == '协商密钥') {
+                    self.showSendFile = false
+                  } else if (self.btnSendText == '发送') {
+                    //check handshake
+                    let division = self.$store.state.OXO.DefaultDivision
+                    let sequence = DHSequence(division, timestamp, self.$store.state.OXO.Address, self.$store.state.OXO.CurrentSession)
+
+                    if (sequence != self.$store.state.OXO.CurrentChatKeySequence || self.$store.state.OXO.CurrentChatKey == "") {
+                      //如果会话密钥为空
+                      //或会话时间区间编号不符
+                      //则再次协商会话密钥
+                      self.btnSendText = '协商密钥'
+                      self.showSendFile = false
+                      self.$store.commit('Handshake', self.$store.state.OXO.CurrentSession)
+                    } else {
+                      let promise = self.$store.dispatch({
+                        type: 'DeliverFileMessage',
+                        timestamp: timestamp,
+                        chatKey: self.$store.state.OXO.CurrentChatKey,
+                        address: self.$store.state.OXO.CurrentSession,
+                        fileToPublish: fileToPublish,
+                        pathJson: pathJson,
+                        size: stats.size
+                      })
+                      promise.then(() => {
+                        self.content = ''
+                        const ul = self.$refs.list
+                        ul.scrollTop = ul.scrollHeight
+                      })
+                    }
+                  }
+                } else {
+                  //group-chat
+                  let promise = self.$store.dispatch({
+                    type: 'DeliverGroupFileMessage',
+                    timestamp: timestamp,
+                    group_hash: self.$store.state.OXO.CurrentSession,
+                    fileToPublish: fileToPublish,
+                    pathJson: pathJson,
+                    size: stats.size
+                  })
+                  promise.then(() => {
+                    self.content = ''
+                    const ul = self.$refs.list
+                    ul.scrollTop = ul.scrollHeight
+                  })
+                }
+              }
+            } else {
+              self.$message({
+                showClose: true,
+                message: '不是文件或者文件为空',
+                type: 'warning'
+              })
+            }
+          }
+        } catch (e) {
+          console.log(e)
+        }
+      })
     }
   },
   watch: {
     'getMessages': function() {
-      let newLastMessage = this.$store.state.OXO.Messages[this.$store.state.OXO.Messages.length - 1];
+      let newLastMessage = this.$store.state.OXO.Messages[this.$store.state.OXO.Messages.length - 1]
       if (this.lastMessage != newLastMessage) {
         this.lastMessage = newLastMessage
         this.$nextTick(() => {
@@ -239,25 +294,34 @@ export default {
       if (this.$store.state.OXO.CurrentSession[0] == 'o') {
         if (this.$store.state.OXO.CurrentChatKey == '') {
           this.btnSendText = '协商密钥'
+          this.showSendFile = false
         } else {
           this.btnSendText = '发送'
+          this.btnSendFile = '发送文件'
+          this.showSendFile = true
         }
       } else {
         this.btnSendText = '发送'
+        this.btnSendFile = '发送文件'
       }
     },
     'currentChatKey': function() {
       if (this.$store.state.OXO.CurrentChatKey == '') {
         this.btnSendText = '协商密钥'
+        this.showSendFile = false
       } else {
         this.btnSendText = '发送'
+        this.btnSendFile = '发送文件'
+        this.showSendFile = true
       }
     },
     'getWSState': function() {
       if (this.$store.state.OXO.WSState == 1) {
-        this.$refs.btnSend.disabled = false
+        this.$refs.btnSendText.disabled = false
+        this.$refs.btnSendFile.disabled = false
       } else {
-        this.$refs.btnSend.disabled = true
+        this.$refs.btnSendText.disabled = true
+        this.$refs.btnSendFile.disabled = true
       }
     }
   }

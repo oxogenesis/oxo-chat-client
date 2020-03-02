@@ -13,7 +13,7 @@ import {
 import {
   checkJsonSchema,
   checkBulletinSchema,
-  checkBulletinFileSchema,
+  checkFileChunkSchema,
   checkGroupManageSchema,
   checkGroupRequestSchema,
   checkGroupMessageSchema,
@@ -88,20 +88,22 @@ const state = {
 
   //constant
   ActionCode: {
-    "Declare": 200,
-    "ObjectResponse": 201,
+    "Declare": 100,
+    "ObjectResponse": 101,
 
-    "BulletinRequest": 211,
-    "BulletinFileRequest": 212,
+    "BulletinRequest": 201,
+    "BulletinFileRequest": 202,
 
-    "ChatDH": 221,
-    "ChatMessage": 222,
-    "ChatSync": 223,
+    "ChatDH": 301,
+    "ChatMessage": 302,
+    "ChatSync": 303,
+    "PrivateFileRequest": 304,
 
-    "GroupRequest": 231,
-    "GroupManageSync": 232,
-    "GroupDH": 233,
-    "GroupMessageSync": 234
+    "GroupRequest": 401,
+    "GroupManageSync": 402,
+    "GroupDH": 403,
+    "GroupMessageSync": 404,
+    "GroupFileRequest": 405
   },
   DefaultDivision: 3,
 
@@ -125,11 +127,14 @@ const state = {
   },
 
   ObjectType: {
-    "Bulletin": 111,
-    "BulletinFile": 112,
+    "Bulletin": 101,
+    "BulletinFile": 102,
 
-    "GroupManage": 131,
-    "GroupMessage": 132
+    "PrivateFile": 201,
+
+    "GroupManage": 301,
+    "GroupMessage": 302,
+    "GroupFile": 303
   },
 
   SessionType: {
@@ -176,6 +181,29 @@ function Array2Str(array) {
     tmpArray.push(`'${array[i]}'`)
   }
   return tmpArray.join(',')
+}
+
+function AesEncrypt(content, aes_key) {
+  let key = aes_key.slice(0, 32)
+  let iv = aes_key.slice(32, 48)
+
+  let str = encrypt(key, iv, content)
+  return str
+}
+
+function AesDecrypt(str, aes_key) {
+  let key = aes_key.slice(0, 32)
+  let iv = aes_key.slice(32, 48)
+  let content = decrypt(key, iv, str)
+  return content
+}
+
+function FilePath(sha1) {
+  return `./data/${state.Address}/${sha1.substr(0,3)}/${sha1.substr(3,3)}/${sha1}`
+}
+
+function FileDir(sha1) {
+  return `./data/${state.Address}/${sha1.substr(0,3)}/${sha1.substr(3,3)}/`
 }
 
 function VerifyJsonSignature(json) {
@@ -284,7 +312,7 @@ function PublishBulletinContent(content, is_file) {
   }
   //save bulletin
   let SQL = `INSERT INTO BULLETINS (address, sequence, pre_hash, content, timestamp, json, created_at, hash, quote_size, is_file, file_saved, file_sha1)
-      VALUES ('${state.Address}', ${state.CurrentBulletinSequence + 1}, '${state.CurrentBulletinHash}', '${content}', ${timestamp}, '${strJson}', ${timestamp}, '${hash}', ${tmpQuotes.length}, ${is_file}, ${file_saved}, '${fileSHA1}')`
+    VALUES ('${state.Address}', ${state.CurrentBulletinSequence + 1}, '${state.CurrentBulletinHash}', '${content}', ${timestamp}, '${strJson}', ${timestamp}, '${hash}', ${tmpQuotes.length}, ${is_file}, ${file_saved}, '${fileSHA1}')`
 
   state.DB.run(SQL, err => {
     if (err) {
@@ -336,7 +364,7 @@ function SaveContentBulletin(SQL, objectAddress, bulletinJson, timestamp, hash) 
   }
 }
 
-function SaveFileBulletin(SQL, objectAddress, bulletinJson, timestamp, hash, is_file, file_saved, fileJson, relay1_address) {
+function SaveFileBulletin(SQL, objectAddress, bulletinJson, timestamp, hash, is_file, file_saved, fileJson, relay_address) {
   if (state.Follows.includes(objectAddress)) {
     //bulletin from follow
     //save bulletin
@@ -345,7 +373,7 @@ function SaveFileBulletin(SQL, objectAddress, bulletinJson, timestamp, hash, is_
         console.log(err)
       } else {
         if (state.CurrentBBSession == "*" || state.CurrentBBSession == objectAddress) {
-          state.Bulletins.unshift({ "address": objectAddress, "name": state.Contacts[objectAddress], "timestamp": bulletinJson.Timestamp, "created_at": timestamp, 'sequence': bulletinJson.Sequence, 'is_file': is_file, 'file_saved': file_saved, 'file': fileJson, 'relay1_address': relay1_address, 'hash': hash, 'quote_size': bulletinJson.Quote.length })
+          state.Bulletins.unshift({ "address": objectAddress, "name": state.Contacts[objectAddress], "timestamp": bulletinJson.Timestamp, "created_at": timestamp, 'sequence': bulletinJson.Sequence, 'is_file': is_file, 'file_saved': file_saved, 'file': fileJson, 'relay_address': relay_address, 'hash': hash, 'quote_size': bulletinJson.Quote.length })
         }
         let strJson = GenBulletinRequest(objectAddress, bulletinJson.Sequence + 1, objectAddress)
         state.WS.send(strJson)
@@ -365,7 +393,7 @@ function SaveFileBulletin(SQL, objectAddress, bulletinJson, timestamp, hash, is_
             state.DisplayQuotes[i].quote_size = bulletinJson.Quote.length
             state.DisplayQuotes[i].is_file = is_file
             state.DisplayQuotes[i].file_saved = file_saved
-            state.DisplayQuotes[i].relay1_address = relay1_address
+            state.DisplayQuotes[i].relay_address = relay_address
             state.DisplayQuotes[i].file = fileJson
           }
         }
@@ -374,7 +402,7 @@ function SaveFileBulletin(SQL, objectAddress, bulletinJson, timestamp, hash, is_
   }
 }
 
-function SaveBulletin(relay1Address, bulletinJson) {
+function SaveBulletin(relay_address, bulletinJson) {
   let objectAddress = oxoKeyPairs.deriveAddress(bulletinJson.PublicKey)
   let strJson = JSON.stringify(bulletinJson)
   let hash = quarterSHA512(strJson)
@@ -388,8 +416,8 @@ function SaveBulletin(relay1Address, bulletinJson) {
     let fileJson = null
     let fileSHA1 = null
 
-    let SQL = `INSERT INTO BULLETINS (address, sequence, pre_hash, content, timestamp, json, created_at, hash, quote_size, is_file, file_saved, file_sha1, relay1_address)
-      VALUES ('${objectAddress}', ${bulletinJson.Sequence}, '${bulletinJson.PreHash}', '${bulletinJson.Content}', '${bulletinJson.Timestamp}', '${strJson}', ${timestamp}, '${hash}', ${bulletinJson.Quote.length}, ${is_file}, ${file_saved}, '${fileSHA1}', '${relay1Address}')`
+    let SQL = `INSERT INTO BULLETINS (address, sequence, pre_hash, content, timestamp, json, created_at, hash, quote_size, is_file, file_saved, file_sha1, relay_address)
+      VALUES ('${objectAddress}', ${bulletinJson.Sequence}, '${bulletinJson.PreHash}', '${bulletinJson.Content}', '${bulletinJson.Timestamp}', '${strJson}', ${timestamp}, '${hash}', ${bulletinJson.Quote.length}, ${is_file}, ${file_saved}, '${fileSHA1}', '${relay_address}')`
     try {
       fileJson = JSON.parse(bulletinJson.Content)
       //is a json
@@ -400,16 +428,15 @@ function SaveBulletin(relay1Address, bulletinJson) {
         let fileSQL = `SELECT * FROM FILES WHERE sha1 = "${fileJson.SHA1}" AND saved = true`
         state.DB.get(fileSQL, (err, item) => {
           if (err) {
-            //never go here
             console.log(err)
           } else {
             if (item != null) {
               file_saved = true
             }
             //update sql
-            SQL = `INSERT INTO BULLETINS (address, sequence, pre_hash, content, timestamp, json, created_at, hash, quote_size, is_file, file_saved, file_sha1, relay1_address)
-              VALUES ('${objectAddress}', ${bulletinJson.Sequence}, '${bulletinJson.PreHash}', '${bulletinJson.Content}', '${bulletinJson.Timestamp}', '${strJson}', ${timestamp}, '${hash}', ${bulletinJson.Quote.length}, ${is_file}, ${file_saved}, '${fileSHA1}', '${relay1Address}')`
-            SaveFileBulletin(SQL, objectAddress, bulletinJson, timestamp, hash, is_file, file_saved, fileJson, relay1Address)
+            SQL = `INSERT INTO BULLETINS (address, sequence, pre_hash, content, timestamp, json, created_at, hash, quote_size, is_file, file_saved, file_sha1, relay_address)
+              VALUES ('${objectAddress}', ${bulletinJson.Sequence}, '${bulletinJson.PreHash}', '${bulletinJson.Content}', '${bulletinJson.Timestamp}', '${strJson}', ${timestamp}, '${hash}', ${bulletinJson.Quote.length}, ${is_file}, ${file_saved}, '${fileSHA1}', '${relay_address}')`
+            SaveFileBulletin(SQL, objectAddress, bulletinJson, timestamp, hash, is_file, file_saved, fileJson, relay_address)
           }
         })
       } else {
@@ -424,8 +451,8 @@ function SaveBulletin(relay1Address, bulletinJson) {
   }
 }
 
-function SaveBulletinFileChunk(fileJson, flag, fileChunk, relay1_address) {
-  let filePath = `./data/${state.Address}/${fileJson.SHA1.substr(0,3)}/${fileJson.SHA1.substr(3,3)}/${fileJson.SHA1}`
+function SaveBulletinFileChunk(fileJson, flag, fileChunk, relay_address) {
+  let filePath = FilePath(fileJson.SHA1)
   let ws = fs.createWriteStream(filePath, {
     flags: flag,
     start: fileJson.Chunk * ChunkSize
@@ -437,6 +464,16 @@ function SaveBulletinFileChunk(fileJson, flag, fileChunk, relay1_address) {
         console.log(err)
       } else {
         //file chunk saved
+        for (let i = state.Bulletins.length - 1; i >= 0; i--) {
+          if (state.Bulletins[i].is_file == true && fileJson.SHA1 == state.Bulletins[i].file.SHA1 && state.Bulletins[i].file_saved == false) {
+            state.Bulletins[i].file_percent = `${fileJson.Chunk+1}\/${fileChunk}`
+          }
+        }
+        for (let i = state.DisplayQuotes.length - 1; i >= 0; i--) {
+          if (state.DisplayQuotes[i].is_file == true && fileJson.SHA1 == state.DisplayQuotes[i].file.SHA1 && state.DisplayQuotes[i].file_saved == false) {
+            state.DisplayQuotes[i].file_percent = `${fileJson.Chunk+1}\/${fileChunk}`
+          }
+        }
         //console.log(`FileChunkSaved#${fileJson.Chunk}/${fileChunk}`)
         if (fileJson.Chunk + 1 == fileChunk) {
           //file saved
@@ -487,7 +524,7 @@ function SaveBulletinFileChunk(fileJson, flag, fileChunk, relay1_address) {
           })
         } else {
           //fetch next chunk
-          let strJson = GenBulletinFileRequest(fileJson.SHA1, fileJson.Chunk, relay1_address)
+          let strJson = GenBulletinFileRequest(fileJson.SHA1, fileJson.Chunk, relay_address)
           state.WS.send(strJson)
         }
       }
@@ -500,26 +537,26 @@ function SaveBulletinFileChunk(fileJson, flag, fileChunk, relay1_address) {
   ws.end()
 }
 
-function SaveBulletinFile(relay1_address, fileJson) {
+function SaveBulletinFile(relay_address, fileJson) {
   let SQL = `SELECT * FROM FILES WHERE sha1 = "${fileJson.SHA1}"`
   state.DB.get(SQL, (err, item) => {
     if (err) {
-      //never go here
       console.log(err)
     } else {
       if (item != null && item.saved == false && item.current_chunk + 1 == fileJson.Chunk) {
         if (fileJson.Chunk == 0) {
           let flag = 'w'
-          mkdirs(`./data/${state.Address}/${fileJson.SHA1.substr(0,3)}/${fileJson.SHA1.substr(3,3)}/`, (err) => {
+          let fileDir = FileDir(fileJson.SHA1)
+          mkdirs(fileDir, (err) => {
             if (err) {
               throw err
             } else {
-              SaveBulletinFileChunk(fileJson, flag, item.chunk, relay1_address)
+              SaveBulletinFileChunk(fileJson, flag, item.chunk, relay_address)
             }
           })
         } else {
           let flag = 'r+'
-          SaveBulletinFileChunk(fileJson, flag, item.chunk, relay1_address)
+          SaveBulletinFileChunk(fileJson, flag, item.chunk, relay_address)
         }
       }
     }
@@ -564,7 +601,7 @@ function HandleBulletinFileRequest(json) {
           chunkEnd = fileJson.Size - 1
         }
 
-        let file_path = `./data/${state.Address}/${json.SHA1.substr(0,3)}/${json.SHA1.substr(3,3)}/${json.SHA1}`
+        let file_path = FilePath(json.SHA1)
         let rs = fs.createReadStream(file_path, {
           highWaterMark: ChunkSize,
           start: chunkBegin, //读取文件开始位置
@@ -686,7 +723,10 @@ function InitDB(address) {
         created_at INTEGER,
         json TEXT,
         confirmed BOOLEAN DEFAULT FALSE,
-        readed BOOLEAN DEFAULT FALSE
+        readed BOOLEAN DEFAULT FALSE,
+        is_file BOOLEAN DEFAULT FALSE,
+        file_saved BOOLEAN DEFAULT FALSE,
+        file_sha1 VARCHAR(40)
         )`, err => {
       if (err) {
         console.log(err)
@@ -706,7 +746,7 @@ function InitDB(address) {
         is_file BOOLEAN DEFAULT FALSE,
         file_saved BOOLEAN DEFAULT FALSE,
         file_sha1 VARCHAR(40),
-        relay1_address VARCHAR(35)
+        relay_address VARCHAR(35)
         )`, err => {
       if (err) {
         console.log(err)
@@ -783,7 +823,10 @@ function InitDB(address) {
         timestamp INTEGER,
         created_at INTEGER,
         json TEXT,
-        readed BOOLEAN DEFAULT FALSE
+        readed BOOLEAN DEFAULT FALSE,
+        is_file BOOLEAN DEFAULT FALSE,
+        file_saved BOOLEAN DEFAULT FALSE,
+        file_sha1 VARCHAR(40)
         )`, err => {
       if (err) {
         console.log(err)
@@ -1083,6 +1126,126 @@ function Handshake(address) {
   })
 }
 
+function SendTextMessage(chatkey, content, to, timestamp, is_file) {
+  //compose message
+  return new Promise(function(resolve, reject) {
+    //get pair message not confirmed
+    let SQL = `SELECT * FROM MESSAGES WHERE sour_address = '${state.CurrentSession}' AND confirmed = false ORDER BY sequence ASC LIMIT 8`
+    state.DB.all(SQL, (err, items) => {
+      if (err) {
+        console.log(err);
+        reject();
+      } else {
+        let pairHash = []
+        for (let i = items.length - 1; i >= 0; i--) {
+          pairHash.push(items[i].hash)
+        }
+
+        let json = {
+          "Action": state.ActionCode.ChatMessage,
+          "Sequence": state.CurrentMessageSequence + 1,
+          "PreHash": state.CurrentMessageHash,
+          "PairHash": pairHash,
+          "Content": AesEncrypt(content, chatkey),
+          "To": to,
+          "Timestamp": timestamp,
+          "PublicKey": state.PublicKey
+        }
+        let sig = sign(JSON.stringify(json), state.PrivateKey)
+        json.Signature = sig
+        let strJson = JSON.stringify(json)
+        let hash = quarterSHA512(strJson)
+
+        let file_saved = false
+        let fileJson = null
+        let fileSHA1 = null
+        if (is_file) {
+          fileJson = JSON.parse(content)
+          file_saved = true
+          fileSHA1 = fileJson["SHA1"]
+        }
+        //save message
+        SQL = `INSERT INTO MESSAGES (dest_address, sequence, pre_hash, content, timestamp, json, created_at, readed, hash, is_file, file_saved, file_sha1)
+          VALUES ('${to}', ${state.CurrentMessageSequence + 1}, '${state.CurrentMessageHash}', '${content}', '${timestamp}', '${strJson}', '${timestamp}', true, '${hash}', ${is_file}, ${file_saved}, '${fileSHA1}')`
+
+        state.DB.run(SQL, err => {
+          if (err) {
+            console.log(err)
+            reject();
+          } else {
+            state.WS.send(strJson)
+            if (is_file) {
+              state.Messages.push({ "is_private": true, "address": state.Address, "timestamp": timestamp, "created_at": timestamp, 'sequence': state.CurrentMessageSequence + 1, "content": content, 'confirmed': false, 'hash': hash, "is_file": is_file, "file_saved": file_saved, "file": fileJson })
+            } else {
+              state.Messages.push({ "is_private": true, "address": state.Address, "timestamp": timestamp, "created_at": timestamp, 'sequence': state.CurrentMessageSequence + 1, "content": content, 'confirmed': false, 'hash': hash })
+            }
+            state.CurrentMessageSequence += 1
+            state.CurrentMessageHash = hash
+
+            SQL = `UPDATE MESSAGES SET confirmed = true WHERE sour_address = '${to}' AND hash IN (${Array2Str(pairHash)})`
+            state.DB.run(SQL, err => {
+              if (err) {
+                console.log(err)
+                reject();
+              } else {
+                for (let i = state.Messages.length - 1; i >= 0; i--) {
+                  if (pairHash.includes(state.Messages[i].hash)) {
+                    state.Messages[i].confirmed = true
+                  }
+                }
+                resolve();
+              }
+            })
+          }
+        })
+      }
+    })
+  })
+}
+
+//save string
+function SaveContentPrivateMessage(SQL, sour_address, messageJson, created_at, content, hash, is_file, file_saved, fileJson) {
+  state.DB.run(SQL, err => {
+    if (err) {
+      console.log(err)
+    } else {
+      let i = state.Sessions.length - 1
+      for (; i >= 0; i--) {
+        if (state.Sessions[i].type == state.SessionType.Private && state.Sessions[i].session == sour_address) {
+          break
+        }
+      }
+      if (state.CurrentSession == sour_address) {
+        //CurrentSession: show message
+        state.Messages.push({ "is_private": true, "address": sour_address, "timestamp": messageJson.Timestamp, "sequence": messageJson.Sequence, "created_at": created_at, "content": content, 'confirmed': false, 'hash': hash, "is_file": is_file, "file_saved": file_saved, "file": fileJson })
+      } else {
+        //not CurrentSession: update unread_count
+        state.Sessions[i].unread_count += 1
+      }
+      state.Sessions[i].updated_at = created_at
+      state.Sessions.sort((a, b) => (a.updated_at < b.updated_at) ? 1 : -1)
+
+      //tray blink
+      ipcRenderer.send('synchronous-message', 'new-private-message')
+
+      //update db-message(confirmed)
+      SQL = `UPDATE MESSAGES SET confirmed = true WHERE dest_address = '${sour_address}' AND hash IN (${Array2Str(messageJson.PairHash)})`
+      state.DB.run(SQL, err => {
+        if (err) {
+          console.log(err)
+        } else {
+          //update view-message(confirmed)
+          for (let i = state.Messages.length - 1; i >= 0; i--) {
+            if (state.Messages[i].confirmed == false && messageJson.PairHash.includes(state.Messages[i].hash)) {
+              state.Messages[i].confirmed = true
+            }
+          }
+        }
+      })
+    }
+  })
+}
+
 function SavePrivateMessage(sour_address, messageJson) {
   let division = state.DefaultDivision
   let sequence = DHSequence(division, messageJson.Timestamp, state.Address, sour_address)
@@ -1099,9 +1262,7 @@ function SavePrivateMessage(sour_address, messageJson) {
       }
 
       //decrypt content
-      let key = item.aes_key.slice(0, 32)
-      let iv = item.aes_key.slice(32, 48)
-      let content = decrypt(key, iv, messageJson.Content)
+      let content = AesDecrypt(messageJson.Content, item.aes_key)
 
       let strJson = JSON.stringify(messageJson)
       let hash = quarterSHA512(strJson)
@@ -1111,49 +1272,47 @@ function SavePrivateMessage(sour_address, messageJson) {
       if (sour_address == state.CurrentSession) {
         readed = true
       }
+
+      //check is_file?
+      let is_file = false
+      let file_saved = false
+      let fileJson = null
+      let fileSHA1 = null
+
       //save message
-      let SQL = `INSERT INTO MESSAGES (sour_address, sequence, pre_hash, content, timestamp, json, hash, created_at, readed)
-                VALUES ('${sour_address}', ${messageJson.Sequence}, '${messageJson.PreHash}', '${content}', '${messageJson.Timestamp}', '${strJson}', '${hash}', '${created_at}', ${readed})`
+      let SQL = `INSERT INTO MESSAGES (sour_address, sequence, pre_hash, content, timestamp, json, hash, created_at, readed, is_file, file_saved, file_sha1)
+        VALUES ('${sour_address}', ${messageJson.Sequence}, '${messageJson.PreHash}', '${content}', '${messageJson.Timestamp}', '${strJson}', '${hash}', '${created_at}', ${readed}, ${is_file}, ${file_saved}, '${fileSHA1}')`
 
-      state.DB.run(SQL, err => {
-        if (err) {
-          console.log(err)
-        } else {
-          let i = state.Sessions.length - 1
-          for (; i >= 0; i--) {
-            if (state.Sessions[i].type == state.SessionType.Private && state.Sessions[i].session == sour_address) {
-              break
-            }
-          }
-          if (state.CurrentSession == sour_address) {
-            //CurrentSession: show message
-            state.Messages.push({ "address": sour_address, "timestamp": messageJson.Timestamp, "sequence": messageJson.Sequence, "created_at": created_at, "content": content, 'confirmed': false, 'hash': hash })
-          } else {
-            //not CurrentSession: update unread_count
-            state.Sessions[i].unread_count += 1
-          }
-          state.Sessions[i].updated_at = created_at
-          state.Sessions.sort((a, b) => (a.updated_at < b.updated_at) ? 1 : -1)
-
-          //tray blink
-          ipcRenderer.send('synchronous-message', 'new-private-message')
-
-          //update db-message(confirmed)
-          SQL = `UPDATE MESSAGES SET confirmed = true WHERE dest_address = '${sour_address}' AND hash IN (${Array2Str(messageJson.PairHash)})`
-          state.DB.run(SQL, err => {
+      try {
+        fileJson = JSON.parse(content)
+        //is a json
+        if (checkFileSchema(fileJson)) {
+          //is a file json
+          is_file = true
+          fileSHA1 = fileJson["SHA1"]
+          let fileSQL = `SELECT * FROM FILES WHERE sha1 = "${fileJson.SHA1}" AND saved = true`
+          state.DB.get(fileSQL, (err, item) => {
             if (err) {
               console.log(err)
             } else {
-              //update view-message(confirmed)
-              for (let i = state.Messages.length - 1; i >= 0; i--) {
-                if (state.Messages[i].confirmed == false && messageJson.PairHash.includes(state.Messages[i].hash)) {
-                  state.Messages[i].confirmed = true
-                }
+              if (item != null) {
+                file_saved = true
               }
+              //update sql
+              SQL = `INSERT INTO MESSAGES (sour_address, sequence, pre_hash, content, timestamp, json, hash, created_at, readed, is_file, file_saved, file_sha1)
+                VALUES ('${sour_address}', ${messageJson.Sequence}, '${messageJson.PreHash}', '${content}', '${messageJson.Timestamp}', '${strJson}', '${hash}', '${created_at}', ${readed}, ${is_file}, ${file_saved}, '${fileSHA1}')`
+              SaveContentPrivateMessage(SQL, sour_address, messageJson, created_at, content, hash, is_file, file_saved, fileJson)
             }
           })
+        } else {
+          //not a file json, message is a plain-string message
+          SaveContentPrivateMessage(SQL, sour_address, messageJson, created_at, content, hash, is_file, file_saved, fileJson)
         }
-      })
+      } catch (e) {
+        console.log(e)
+        //not a json, message is a plain-string message
+        SaveContentPrivateMessage(SQL, sour_address, messageJson, created_at, content, hash, is_file, file_saved, fileJson)
+      }
     }
   })
 }
@@ -1349,6 +1508,229 @@ function HandleChatSync(json) {
   })
 }
 
+function GenPrivateFileRequest(sha1, chunk, to) {
+  let json = {
+    "Action": state.ActionCode.PrivateFileRequest,
+    "SHA1": sha1,
+    "CurrentChunk": chunk,
+    "To": to,
+    "Timestamp": Date.now(),
+    "PublicKey": state.PublicKey
+  }
+  let sig = sign(JSON.stringify(json), state.PrivateKey)
+  json.Signature = sig
+  let strJson = JSON.stringify(json)
+  return strJson
+}
+
+function HandlePrivateFileRequest(json) {
+  let address = oxoKeyPairs.deriveAddress(json.PublicKey)
+  let SQL = `SELECT * FROM MESSAGES WHERE file_sha1 = "${json.SHA1}" AND file_saved = true ORDER BY sequence DESC`
+  state.DB.get(SQL, (err, msg) => {
+    if (err) {
+      console.log(err)
+    } else {
+      if (msg != null) {
+        let sequence = DHSequence(state.DefaultDivision, msg.timestamp, state.Address, msg.dest_address)
+        SQL = `SELECT * FROM ECDHS WHERE sequence = ${sequence} AND division = ${state.DefaultDivision} AND address = "${msg.dest_address}"`
+        state.DB.get(SQL, (err, ecdh) => {
+          if (err) {
+            console.log(err)
+          } else {
+            if (ecdh != null && ecdh.aes_key != null) {
+              let fileJson = JSON.parse(msg.content)
+              let readChunkCursor = json.CurrentChunk + 1
+              let chunkBegin = readChunkCursor * ChunkSize
+              if (fileJson.Chunk <= readChunkCursor) {
+                return
+              }
+
+              let chunkEnd = readChunkCursor * ChunkSize + ChunkSize - 1
+              if (readChunkCursor + 1 == fileJson.Chunk) {
+                //last chunk
+                chunkEnd = fileJson.Size - 1
+              }
+
+              let file_path = FilePath(json.SHA1)
+              let rs = fs.createReadStream(file_path, {
+                highWaterMark: ChunkSize,
+                start: chunkBegin, //读取文件开始位置
+                end: chunkEnd //流是闭合区间 包含start也含end
+              })
+              let tmpBuffer = null
+              let tmpBufferLength = 0
+              rs.on("open", () => {
+                //console.log("rs open")
+              })
+              rs.on('data', (data) => {
+                //console.log(`#data:${data.length}`)
+                if (tmpBuffer == null) {
+                  tmpBuffer = data
+                  tmpBufferLength = data.length
+                } else {
+                  tmpBufferLength = tmpBufferLength + data.length
+                  tmpBuffer = Buffer.concat([Buffer.from(tmpBuffer), Buffer.from(data)], tmpBufferLength)
+                }
+                //console.log(`data:${typeof(data)}`)
+                //console.log(`tmpBuffer:${typeof(tmpBuffer)}`)
+                //console.log(`#tmpBuffer:${tmpBuffer.length}`)
+                if (tmpBuffer.length != chunkEnd + 1 - chunkBegin) {
+                  return
+                } else {
+                  let base64 = tmpBuffer.toString('base64')
+                  let content = AesEncrypt(base64, ecdh.aes_key)
+                  //console.log(`#${readChunkCursor}:${base64.length}`)
+                  let chunkJson = {
+                    "ObjectType": state.ObjectType.PrivateFile,
+                    "SHA1": json.SHA1,
+                    "Chunk": readChunkCursor,
+                    "Content": content
+                  }
+                  let strJson = GenObjectResponse(chunkJson, address)
+                  state.WS.send(strJson)
+                  readChunkCursor = readChunkCursor + 1
+                }
+              })
+              rs.on("err", () => {
+                //console.log("rs err")
+              })
+              rs.on('end', () => {
+                //console.log("rs end")
+              })
+              rs.on("close", () => {
+                //console.log("rs close")
+              })
+            }
+          }
+        })
+      }
+    }
+  })
+}
+
+function SavePrivateFileChunk(fileJson, flag, fileChunk, address) {
+  let filePath = FilePath(fileJson.SHA1)
+  let ws = fs.createWriteStream(filePath, {
+    flags: flag,
+    start: fileJson.Chunk * ChunkSize
+  })
+  ws.on('finish', function() {
+    let SQL = `UPDATE FILES SET current_chunk = ${fileJson.Chunk} WHERE sha1 = "${fileJson.SHA1}"`
+    state.DB.run(SQL, err => {
+      if (err) {
+        console.log(err)
+      } else {
+        //file chunk saved
+        for (let i = state.Messages.length - 1; i >= 0; i--) {
+          if (state.Messages[i].is_file == true && fileJson.SHA1 == state.Messages[i].file.SHA1 && state.Messages[i].file_saved == false) {
+            state.Messages[i].file_percent = `${fileJson.Chunk+1}\/${fileChunk}`
+          }
+        }
+
+        //console.log(`FileChunkSaved#${fileJson.Chunk}/${fileChunk}`)
+        if (fileJson.Chunk + 1 == fileChunk) {
+          //file saved
+          let sha1Hasher = crypto.createHash("sha1")
+          let stream = fs.createReadStream(filePath)
+          stream.on('data', function(chunk) {
+            sha1Hasher.update(chunk)
+          })
+          stream.on('end', function() {
+            let sha1 = sha1Hasher.digest('hex').toUpperCase()
+            //check sha1
+            if (sha1 == fileJson.SHA1) {
+              //verify ok
+              SQL = `UPDATE FILES SET saved = true WHERE sha1 = "${fileJson.SHA1}"`
+              state.DB.run(SQL, err => {
+                if (err) {
+                  console.log(err)
+                } else {
+                  SQL = `UPDATE MESSAGES SET file_saved = true WHERE file_sha1 = "${fileJson.SHA1}"`
+                  state.DB.run(SQL, err => {
+                    if (err) {
+                      console.log(err)
+                    } else {
+                      //update bulletin file button
+                      for (let i = state.Messages.length - 1; i >= 0; i--) {
+                        if (state.Messages[i].is_file == true && fileJson.SHA1 == state.Messages[i].file.SHA1) {
+                          state.Messages[i].file_saved = true
+                        }
+                      }
+                    }
+                  })
+                }
+              })
+            } else {
+              //verify fail, remove
+              fs.unlink(filePath, function(err) {
+                if (err) {
+                  throw err;
+                }
+                console.log('文件:' + filePath + '删除成功！');
+              })
+            }
+          })
+        } else {
+          //fetch next chunk
+          let strJson = GenPrivateFileRequest(fileJson.SHA1, fileJson.Chunk, address)
+          state.WS.send(strJson)
+        }
+      }
+    })
+  })
+  ws.on('error', function(err) {
+    console.log(err.stack)
+  })
+  ws.write(Buffer.from(fileJson.Content, 'base64'), null)
+  ws.end()
+}
+
+function SavePrivateFile(address, fileJson) {
+  let SQL = `SELECT * FROM FILES WHERE sha1 = "${fileJson.SHA1}"`
+  state.DB.get(SQL, (err, file) => {
+    if (err) {
+      console.log(err)
+    } else {
+      if (file != null && file.saved == false && file.current_chunk + 1 == fileJson.Chunk) {
+        SQL = `SELECT * FROM MESSAGES WHERE file_sha1 = "${fileJson.SHA1}" AND file_saved = false ORDER BY sequence DESC`
+        state.DB.get(SQL, (err, msg) => {
+          if (err) {
+            console.log(err)
+          } else {
+            if (msg != null) {
+              let sequence = DHSequence(state.DefaultDivision, msg.timestamp, state.Address, msg.sour_address)
+              SQL = `SELECT * FROM ECDHS WHERE sequence = ${sequence} AND division = ${state.DefaultDivision} AND address = "${msg.sour_address}"`
+              state.DB.get(SQL, (err, ecdh) => {
+                if (err) {
+                  console.log(err)
+                } else {
+                  if (ecdh != null && ecdh.aes_key != null) {
+                    fileJson.Content = AesDecrypt(fileJson.Content, ecdh.aes_key)
+                    if (fileJson.Chunk == 0) {
+                      let flag = 'w'
+                      let fileDir = FileDir(fileJson.SHA1)
+                      mkdirs(fileDir, (err) => {
+                        if (err) {
+                          throw err
+                        } else {
+                          SavePrivateFileChunk(fileJson, flag, file.chunk, address)
+                        }
+                      })
+                    } else {
+                      let flag = 'r+'
+                      SavePrivateFileChunk(fileJson, flag, file.chunk, address)
+                    }
+                  }
+                }
+              })
+            }
+          }
+        })
+      }
+    }
+  })
+}
+
 ////group-chat
 //////申请加群、离群
 function GenGroupManageRequest(group_hash, sequence, to) {
@@ -1419,8 +1801,6 @@ function Broadcast2Group(group_hash, object) {
 function GenGroupMessage(msg_json, aes_key, to) {
   let tmp_msg = JSON.stringify(msg_json)
   let tmp_json = JSON.parse(tmp_msg)
-  let key = aes_key.slice(0, 32)
-  let iv = aes_key.slice(32, 48)
 
   let group_hash = tmp_json.GroupHash
   let publicKey = tmp_json.PublicKey
@@ -1428,9 +1808,9 @@ function GenGroupMessage(msg_json, aes_key, to) {
   delete tmp_json["ActionCode"]
   delete tmp_json["GroupHash"]
 
-  let msg = encrypt(key, iv, JSON.stringify(tmp_json))
+  let msg = AesEncrypt(JSON.stringify(tmp_json), aes_key)
 
-  let strMessage = GenObjectResponse({ "GroupHash": group_hash, "PublicKey": publicKey, "Message": msg }, to)
+  let strMessage = GenObjectResponse({ "ObjectType": state.ObjectType.GroupMessage, "GroupHash": group_hash, "PublicKey": publicKey, "Message": msg }, to)
   return strMessage
 }
 
@@ -1531,6 +1911,130 @@ function GroupHandshake(group_hash) {
   })
 }
 
+function SendGroupTextMessage(group_hash, content, timestamp, is_file) {
+  //get pair message not confirmed
+  return new Promise(function(resolve, reject) {
+    let SQL = `SELECT * FROM GROUP_MESSAGES WHERE group_hash = '${state.CurrentSession}' AND sour_address != '${state.Address}' ORDER BY created_at DESC`
+    state.DB.get(SQL, (err, item) => {
+      if (err) {
+        console.log(err)
+        reject();
+      } else {
+        let json = null
+        if (item == null) {
+          json = {
+            "GroupHash": group_hash,
+            "Sequence": state.CurrentGroupMessageSequence + 1,
+            "PreHash": state.CurrentGroupMessageHash,
+            "Content": content,
+            "Timestamp": timestamp,
+            "PublicKey": state.PublicKey
+          }
+        } else {
+          json = {
+            "GroupHash": group_hash,
+            "Sequence": state.CurrentGroupMessageSequence + 1,
+            "PreHash": state.CurrentGroupMessageHash,
+            "Confirm": { "Address": item.sour_address, "Sequence": item.sequence, "Hash": item.hash },
+            "Content": content,
+            "Timestamp": timestamp,
+            "PublicKey": state.PublicKey
+          }
+        }
+
+        let sig = sign(JSON.stringify(json), state.PrivateKey)
+        json.Signature = sig
+
+        let strJson = JSON.stringify(json)
+        let hash = quarterSHA512(strJson)
+
+        let file_saved = false
+        let fileJson = null
+        let fileSHA1 = null
+        if (is_file) {
+          fileJson = JSON.parse(content)
+          file_saved = true
+          fileSHA1 = fileJson["SHA1"]
+        }
+        //save message
+        SQL = `INSERT INTO GROUP_MESSAGES (group_hash, sour_address, sequence, pre_hash, content, timestamp, json, created_at, hash, readed, is_file, file_saved, file_sha1)
+          VALUES ('${group_hash}', '${state.Address}', ${state.CurrentGroupMessageSequence + 1}, '${state.CurrentGroupMessageHash}', '${content}', '${timestamp}', '${strJson}', '${timestamp}', '${hash}', true, ${is_file}, ${file_saved}, '${fileSHA1}')`
+
+        state.DB.run(SQL, err => {
+          if (err) {
+            console.log(err)
+            reject();
+          } else {
+            state.CurrentGroupMessageSequence += 1
+            state.CurrentGroupMessageHash = hash
+
+            if (is_file) {
+              state.Messages.push({ "is_private": false, "address": state.Address, "timestamp": timestamp, "created_at": timestamp, 'sequence': state.CurrentGroupMessageSequence, "content": content, 'hash': hash, "is_file": is_file, "file_saved": file_saved, "file": fileJson })
+            } else {
+              state.Messages.push({ "is_private": false, "address": state.Address, "timestamp": timestamp, "created_at": timestamp, 'sequence': state.CurrentGroupMessageSequence, "content": content, 'hash': hash })
+            }
+
+            BroadcastGroupMessage(json);
+            resolve();
+          }
+        })
+      }
+    })
+  })
+}
+
+function SaveContentGroupMessage(SQL, group_hash, msgAddress, jsonTmp, timestamp, hash, is_file, file_saved, fileJson) {
+  state.DB.run(SQL, err => {
+    if (err) {
+      console.log(err)
+    } else {
+      let i = state.Sessions.length - 1
+      for (; i >= 0; i--) {
+        if (state.Sessions[i].type == state.SessionType.Group && state.Sessions[i].session == group_hash) {
+          break
+        }
+      }
+      //update current group message
+      if (state.CurrentSession == group_hash) {
+        state.Messages.push({ "is_private": false, "address": msgAddress, "timestamp": jsonTmp.Timestamp, "created_at": timestamp, 'sequence': jsonTmp.Sequence, "content": jsonTmp.Content, 'hash': hash, "is_file": is_file, "file_saved": file_saved, "file": fileJson })
+      } else {
+        state.Sessions[i].unread_count += 1
+      }
+      state.Sessions[i].updated_at = timestamp
+      state.Sessions.sort((a, b) => (a.updated_at < b.updated_at) ? 1 : -1)
+
+      ipcRenderer.send('synchronous-message', 'new-group-message')
+
+      if (jsonTmp.Confirm != null) {
+        //sync Confirm msg
+        SQL = `SELECT * FROM GROUP_MESSAGES WHERE hash = '${jsonTmp.Confirm.Hash}'`
+        state.DB.get(SQL, (err, item) => {
+          if (err) {
+            console.log(err)
+          } else {
+            if (item == null) {
+              //missing confirm group_message
+              SQL = `SELECT * FROM GROUP_MESSAGES WHERE group_hash = '${group_hash}' AND sour_address = '${jsonTmp.Confirm.Address}' ORDER BY sequence DESC`
+              state.DB.get(SQL, (err, item) => {
+                if (err) {
+                  console.log(err)
+                } else {
+                  //fetch confirm single-chain
+                  let seq = 0
+                  if (item != null) {
+                    seq = item.sequence
+                  }
+                  SyncGroupMessage(group_hash, jsonTmp.Confirm.Address, seq, address)
+                }
+              })
+            }
+          }
+        })
+      }
+    }
+  })
+}
+
 function SaveGroupMessage(address, messageJson) {
   let group_hash = messageJson.GroupHash
   //check sender is a group member
@@ -1541,9 +2045,7 @@ function SaveGroupMessage(address, messageJson) {
     } else {
       if (sender != null && sender.aes_key != null) {
         //decrypt
-        let key = sender.aes_key.slice(0, 32)
-        let iv = sender.aes_key.slice(32, 48)
-        let content = decrypt(key, iv, messageJson.Message)
+        let content = AesDecrypt(messageJson.Message, sender.aes_key)
         let jsonTmp = JSON.parse(content)
 
         let msgAddress = oxoKeyPairs.deriveAddress(jsonTmp.PublicKey)
@@ -1558,7 +2060,6 @@ function SaveGroupMessage(address, messageJson) {
               let jsonAssemble = null
               if (jsonTmp.Confirm != null) {
                 jsonAssemble = {
-                  "ObjectType": state.ObjectType.GroupMessage,
                   "GroupHash": messageJson.GroupHash,
                   "Sequence": jsonTmp.Sequence,
                   "PreHash": jsonTmp.PreHash,
@@ -1570,7 +2071,6 @@ function SaveGroupMessage(address, messageJson) {
                 }
               } else {
                 jsonAssemble = {
-                  "ObjectType": state.ObjectType.GroupMessage,
                   "GroupHash": messageJson.GroupHash,
                   "Sequence": jsonTmp.Sequence,
                   "PreHash": jsonTmp.PreHash,
@@ -1608,59 +2108,47 @@ function SaveGroupMessage(address, messageJson) {
                       if (group_hash == state.CurrentSession) {
                         readed = true
                       }
+
                       //not drop, then save
-                      SQL = `INSERT INTO GROUP_MESSAGES (group_hash, sour_address, sequence, pre_hash, content, timestamp, json, created_at, hash, readed)
-                        VALUES ('${group_hash}', '${msgAddress}', ${jsonTmp.Sequence}, '${jsonTmp.PreHash}', '${jsonTmp.Content}', '${jsonTmp.Timestamp}', '${strJson}', '${timestamp}', '${hash}', ${readed})`
+                      //check is_file?
+                      let is_file = false
+                      let file_saved = false
+                      let fileJson = null
+                      let fileSHA1 = null
 
-                      state.DB.run(SQL, err => {
-                        if (err) {
-                          console.log(err)
-                        } else {
-                          let i = state.Sessions.length - 1
-                          for (; i >= 0; i--) {
-                            if (state.Sessions[i].type == state.SessionType.Group && state.Sessions[i].session == group_hash) {
-                              break
-                            }
-                          }
-                          //update current group message
-                          if (state.CurrentSession == group_hash) {
-                            state.Messages.push({ "address": msgAddress, "timestamp": jsonTmp.Timestamp, "created_at": timestamp, 'sequence': jsonTmp.Sequence, "content": jsonTmp.Content, 'hash': hash })
-                          } else {
-                            state.Sessions[i].unread_count += 1
-                          }
-                          state.Sessions[i].updated_at = timestamp
-                          state.Sessions.sort((a, b) => (a.updated_at < b.updated_at) ? 1 : -1)
+                      SQL = `INSERT INTO GROUP_MESSAGES (group_hash, sour_address, sequence, pre_hash, content, timestamp, json, created_at, hash, readed, is_file, file_saved, file_sha1)
+                        VALUES ('${group_hash}', '${msgAddress}', ${jsonTmp.Sequence}, '${jsonTmp.PreHash}', '${jsonTmp.Content}', '${jsonTmp.Timestamp}', '${strJson}', '${timestamp}', '${hash}', ${readed}, ${is_file}, ${file_saved}, '${fileSHA1}')`
 
-                          ipcRenderer.send('synchronous-message', 'new-group-message')
-
-                          if (jsonTmp.Confirm != null) {
-                            //sync Confirm msg
-                            SQL = `SELECT * FROM GROUP_MESSAGES WHERE hash = '${jsonTmp.Confirm.Hash}'`
-                            state.DB.get(SQL, (err, item) => {
-                              if (err) {
-                                console.log(err)
-                              } else {
-                                if (item == null) {
-                                  //missing confirm group_message
-                                  SQL = `SELECT * FROM GROUP_MESSAGES WHERE group_hash = '${group_hash}' AND sour_address = '${jsonTmp.Confirm.Address}' ORDER BY sequence DESC`
-                                  state.DB.get(SQL, (err, item) => {
-                                    if (err) {
-                                      console.log(err)
-                                    } else {
-                                      //fetch confirm single-chain
-                                      let seq = 0
-                                      if (item != null) {
-                                        seq = item.sequence
-                                      }
-                                      SyncGroupMessage(group_hash, jsonTmp.Confirm.Address, seq, address)
-                                    }
-                                  })
-                                }
+                      try {
+                        fileJson = JSON.parse(jsonTmp.Content)
+                        //is a json
+                        if (checkFileSchema(fileJson)) {
+                          //is a file json
+                          is_file = true
+                          fileSHA1 = fileJson["SHA1"]
+                          let fileSQL = `SELECT * FROM FILES WHERE sha1 = "${fileJson.SHA1}" AND saved = true`
+                          state.DB.get(fileSQL, (err, item) => {
+                            if (err) {
+                              console.log(err)
+                            } else {
+                              if (item != null) {
+                                file_saved = true
                               }
-                            })
-                          }
+                              //update sql
+                              SQL = `INSERT INTO GROUP_MESSAGES (group_hash, sour_address, sequence, pre_hash, content, timestamp, json, created_at, hash, readed, is_file, file_saved, file_sha1)
+                                VALUES ('${group_hash}', '${msgAddress}', ${jsonTmp.Sequence}, '${jsonTmp.PreHash}', '${jsonTmp.Content}', '${jsonTmp.Timestamp}', '${strJson}', '${timestamp}', '${hash}', ${readed}, ${is_file}, ${file_saved}, '${fileSHA1}')`
+                              SaveContentGroupMessage(SQL, group_hash, msgAddress, jsonTmp, timestamp, hash, is_file, file_saved, fileJson)
+                            }
+                          })
+                        } else {
+                          //not a file json, group-message is a plain-string group-message
+                          SaveContentGroupMessage(SQL, group_hash, msgAddress, jsonTmp, timestamp, hash, is_file, file_saved, fileJson)
                         }
-                      })
+                      } catch (e) {
+                        console.log(e)
+                        //not a json, group-message is a plain-string group-message
+                        SaveContentGroupMessage(SQL, group_hash, msgAddress, jsonTmp, timestamp, hash, is_file, file_saved, fileJson)
+                      }
                     }
                   })
                 }
@@ -2101,6 +2589,231 @@ function HandleGroupMessageSync(json) {
   })
 }
 
+function GenGroupFileRequest(sha1, chunk, to) {
+  let json = {
+    "Action": state.ActionCode.GroupFileRequest,
+    "SHA1": sha1,
+    "CurrentChunk": chunk,
+    "To": to,
+    "Timestamp": Date.now(),
+    "PublicKey": state.PublicKey
+  }
+  let sig = sign(JSON.stringify(json), state.PrivateKey)
+  json.Signature = sig
+  let strJson = JSON.stringify(json)
+  return strJson
+}
+
+function HandleGroupFileRequest(json) {
+  let address = oxoKeyPairs.deriveAddress(json.PublicKey)
+  //check group file exist
+  let SQL = `SELECT * FROM GROUP_MESSAGES WHERE file_sha1 = "${json.SHA1}" AND file_saved = true ORDER BY sequence DESC`
+  state.DB.get(SQL, (err, message) => {
+    if (err) {
+      console.log(err)
+    } else {
+      if (message != null) {
+        //check request from group member, and get aes key
+        SQL = `SELECT * FROM GROUP_MEMBERS WHERE group_hash = "${message.group_hash}" AND address = "${address}"`
+        state.DB.get(SQL, (err, member) => {
+          if (err) {
+            console.log(err)
+          } else {
+            if (member != null) {
+              let fileJson = JSON.parse(message.content)
+
+              let readChunkCursor = json.CurrentChunk + 1
+              let chunkBegin = readChunkCursor * ChunkSize
+              if (fileJson.Chunk <= readChunkCursor) {
+                return
+              }
+
+              let chunkEnd = readChunkCursor * ChunkSize + ChunkSize - 1
+              if (readChunkCursor + 1 == fileJson.Chunk) {
+                //last chunk
+                chunkEnd = fileJson.Size - 1
+              }
+
+              let file_path = FilePath(json.SHA1)
+              let rs = fs.createReadStream(file_path, {
+                highWaterMark: ChunkSize,
+                start: chunkBegin, //读取文件开始位置
+                end: chunkEnd //流是闭合区间 包含start也含end
+              })
+              let tmpBuffer = null
+              let tmpBufferLength = 0
+              rs.on("open", () => {
+                //console.log("rs open")
+              })
+              rs.on('data', (data) => {
+                //console.log(`#data:${data.length}`)
+                if (tmpBuffer == null) {
+                  tmpBuffer = data
+                  tmpBufferLength = data.length
+                } else {
+                  tmpBufferLength = tmpBufferLength + data.length
+                  tmpBuffer = Buffer.concat([Buffer.from(tmpBuffer), Buffer.from(data)], tmpBufferLength)
+                }
+                //console.log(`data:${typeof(data)}`)
+                //console.log(`tmpBuffer:${typeof(tmpBuffer)}`)
+                //console.log(`#tmpBuffer:${tmpBuffer.length}`)
+                if (tmpBuffer.length != chunkEnd + 1 - chunkBegin) {
+                  return
+                } else {
+                  let base64 = tmpBuffer.toString('base64')
+                  let content = AesEncrypt(base64, member.aes_key)
+                  //console.log(`#${readChunkCursor}:${base64.length}`)
+                  let chunkJson = {
+                    "ObjectType": state.ObjectType.GroupFile,
+                    "SHA1": json.SHA1,
+                    "Chunk": readChunkCursor,
+                    "Content": content
+                  }
+                  let strJson = GenObjectResponse(chunkJson, address)
+                  state.WS.send(strJson)
+                  readChunkCursor = readChunkCursor + 1
+                }
+              })
+              rs.on("err", () => {
+                //console.log("rs err")
+              })
+              rs.on('end', () => {
+                //console.log("rs end")
+              })
+              rs.on("close", () => {
+                //console.log("rs close")
+              })
+            }
+          }
+        })
+      }
+    }
+  })
+}
+
+function SaveGroupFileChunk(fileJson, flag, fileChunk, address) {
+  let filePath = FilePath(fileJson.SHA1)
+  let ws = fs.createWriteStream(filePath, {
+    flags: flag,
+    start: fileJson.Chunk * ChunkSize
+  })
+  ws.on('finish', function() {
+    let SQL = `UPDATE FILES SET current_chunk = ${fileJson.Chunk} WHERE sha1 = "${fileJson.SHA1}"`
+    state.DB.run(SQL, err => {
+      if (err) {
+        console.log(err)
+      } else {
+        //file chunk saved
+        for (let i = state.Messages.length - 1; i >= 0; i--) {
+          if (state.Messages[i].is_file == true && fileJson.SHA1 == state.Messages[i].file.SHA1 && state.Messages[i].file_saved == false) {
+            state.Messages[i].file_percent = `${fileJson.Chunk+1}\/${fileChunk}`
+          }
+        }
+        //console.log(`FileChunkSaved#${fileJson.Chunk}/${fileChunk}`)
+        if (fileJson.Chunk + 1 == fileChunk) {
+          //file saved
+          let sha1Hasher = crypto.createHash("sha1")
+          let stream = fs.createReadStream(filePath)
+          stream.on('data', function(chunk) {
+            sha1Hasher.update(chunk)
+          })
+          stream.on('end', function() {
+            let sha1 = sha1Hasher.digest('hex').toUpperCase()
+            //check sha1
+            if (sha1 == fileJson.SHA1) {
+              //verify ok
+              SQL = `UPDATE FILES SET saved = true WHERE sha1 = "${fileJson.SHA1}"`
+              state.DB.run(SQL, err => {
+                if (err) {
+                  console.log(err)
+                } else {
+                  SQL = `UPDATE GROUP_MESSAGES SET file_saved = true WHERE file_sha1 = "${fileJson.SHA1}"`
+                  state.DB.run(SQL, err => {
+                    if (err) {
+                      console.log(err)
+                    } else {
+                      //update bulletin file button
+                      for (let i = state.Messages.length - 1; i >= 0; i--) {
+                        if (state.Messages[i].is_file == true && fileJson.SHA1 == state.Messages[i].file.SHA1) {
+                          state.Messages[i].file_saved = true
+                        }
+                      }
+                    }
+                  })
+                }
+              })
+            } else {
+              //verify fail, remove
+              fs.unlink(filePath, function(err) {
+                if (err) {
+                  throw err;
+                }
+                console.log('文件:' + filePath + '删除成功！');
+              })
+            }
+          })
+        } else {
+          //fetch next chunk
+          let strJson = GenGroupFileRequest(fileJson.SHA1, fileJson.Chunk, address)
+          state.WS.send(strJson)
+        }
+      }
+    })
+  })
+  ws.on('error', function(err) {
+    console.log(err.stack)
+  })
+  ws.write(Buffer.from(fileJson.Content, 'base64'), null)
+  ws.end()
+}
+
+function SaveGroupFile(address, fileJson) {
+  let SQL = `SELECT * FROM FILES WHERE sha1 = "${fileJson.SHA1}"`
+  state.DB.get(SQL, (err, item) => {
+    if (err) {
+      console.log(err)
+    } else {
+      if (item != null && item.saved == false && item.current_chunk + 1 == fileJson.Chunk) {
+        //check group file exist
+        let SQL = `SELECT * FROM GROUP_MESSAGES WHERE file_sha1 = "${fileJson.SHA1}" AND file_saved = false ORDER BY sequence DESC`
+        state.DB.get(SQL, (err, message) => {
+          if (err) {
+            console.log(err)
+          } else {
+            if (message != null) {
+              //check request from group member, and get aes key
+              SQL = `SELECT * FROM GROUP_MEMBERS WHERE group_hash = "${message.group_hash}" AND address = "${message.sour_address}"`
+              state.DB.get(SQL, (err, member) => {
+                if (err) {
+                  console.log(err)
+                } else {
+                  if (member != null) {
+                    fileJson.Content = AesDecrypt(fileJson.Content, member.aes_key)
+                    if (fileJson.Chunk == 0) {
+                      let flag = 'w'
+                      let fileDir = FileDir(fileJson.SHA1)
+                      mkdirs(fileDir, (err) => {
+                        if (err) {
+                          throw err
+                        } else {
+                          SaveGroupFileChunk(fileJson, flag, item.chunk, address)
+                        }
+                      })
+                    } else {
+                      let flag = 'r+'
+                      SaveGroupFileChunk(fileJson, flag, item.chunk, address)
+                    }
+                  }
+                }
+              })
+            }
+          }
+        })
+      }
+    }
+  })
+}
+
 //connection
 function Conn() {
   //ws state:
@@ -2158,13 +2871,21 @@ function Conn() {
           HandleBulletinRequest(json)
         } else if (json.Action == state.ActionCode.BulletinFileRequest) {
           HandleBulletinFileRequest(json)
+        } else if (json.Action == state.ActionCode.PrivateFileRequest) {
+          HandlePrivateFileRequest(json)
+        } else if (json.Action == state.ActionCode.GroupFileRequest) {
+          HandleGroupFileRequest(json)
         } else if (json.Action == state.ActionCode.ObjectResponse) {
           let address = oxoKeyPairs.deriveAddress(json.PublicKey)
           let objectJson = json.Object
           if (json.Object.ObjectType == state.ObjectType.Bulletin && checkBulletinSchema(objectJson)) {
             SaveBulletin(address, objectJson)
-          } else if (json.Object.ObjectType == state.ObjectType.BulletinFile && checkBulletinFileSchema(objectJson)) {
+          } else if (json.Object.ObjectType == state.ObjectType.BulletinFile && checkFileChunkSchema(objectJson)) {
             SaveBulletinFile(address, objectJson)
+          } else if (json.Object.ObjectType == state.ObjectType.PrivateFile && checkFileChunkSchema(objectJson)) {
+            SavePrivateFile(address, objectJson)
+          } else if (json.Object.ObjectType == state.ObjectType.GroupFile && checkFileChunkSchema(objectJson)) {
+            SaveGroupFile(address, objectJson)
           } else if (json.Object.ObjectType == state.ObjectType.GroupManage && checkGroupManageSchema(objectJson)) {
             SaveGroupManage(address, objectJson)
           } else if (json.Object.ObjectType == state.ObjectType.GroupMessage) {
@@ -2475,7 +3196,7 @@ const mutations = {
             if (item.sour_address != null) {
               sour_address = item.sour_address
             }
-            state.Messages.unshift({ 'address': sour_address, 'timestamp': item.timestamp, 'created_at': item.created_at, 'sequence': item.sequence, 'content': item.content, 'confirmed': item.confirmed, 'hash': item.hash })
+            state.Messages.unshift({ "is_private": true, 'address': sour_address, 'timestamp': item.timestamp, 'created_at': item.created_at, 'sequence': item.sequence, 'content': item.content, 'confirmed': item.confirmed, 'hash': item.hash })
           }
         }
       })
@@ -2490,11 +3211,54 @@ const mutations = {
           console.log(err)
         } else {
           for (const item of items) {
-            state.Messages.unshift({ "address": item.sour_address, "timestamp": item.timestamp, "created_at": item.created_at, 'sequence': item.sequence, "content": item.content, 'hash': item.hash })
+            state.Messages.unshift({ "is_private": false, "address": item.sour_address, "timestamp": item.timestamp, "created_at": item.created_at, 'sequence': item.sequence, "content": item.content, 'hash': item.hash })
           }
         }
       })
     }
+  },
+  FetchPrivateFile(state, payload) {
+    let file = payload.file
+    let SQL = `SELECT * FROM FILES WHERE sha1 = "${file.SHA1}"`
+    state.DB.get(SQL, (err, item) => {
+      if (err) {
+        console.log(err)
+      } else {
+        if (item != null) {
+          if (item.saved == true) {
+            //already saved
+            SQL = `UPDATE MESSAGES SET file_saved = true WHERE file_sha1 = "${file.SHA1}"`
+            state.DB.run(SQL, err => {
+              if (err) {
+                console.log(err)
+              } else {
+                //update bulletin file button
+                for (let i = state.Messages.length - 1; i >= 0; i--) {
+                  if (state.Messages[i].is_file == true && file.SHA1 == state.Messages[i].file.SHA1) {
+                    state.Messages[i].file_saved = true
+                  }
+                }
+              }
+            })
+          } else {
+            //not saved
+            let strJson = GenPrivateFileRequest(file.SHA1, item.current_chunk, payload.address)
+            state.WS.send(strJson)
+          }
+        } else {
+          SQL = `INSERT INTO FILES (sha1, name, ext, size, chunk, saved, current_chunk, created_at)
+            VALUES ('${file.SHA1}', '${file.Name}', '${file.Ext}', ${file.Size}, ${file.Chunk}, false, -1, ${Date.now()})`
+          state.DB.run(SQL, err => {
+            if (err) {
+              console.log(err)
+            } else {
+              let strJson = GenPrivateFileRequest(file.SHA1, -1, payload.address)
+              state.WS.send(strJson)
+            }
+          })
+        }
+      }
+    })
   },
   //bulletin board => BB
   SwitchBBSession(state, address) {
@@ -2554,7 +3318,7 @@ const mutations = {
                     state.DisplayQuotes[i].quote_size = item.quote_size
                     state.DisplayQuotes[i].is_file = item.is_file
                     state.DisplayQuotes[i].file_saved = item.file_saved
-                    state.DisplayQuotes[i].relay1_address = item.relay1_address
+                    state.DisplayQuotes[i].relay_address = item.relay_address
                     state.DisplayQuotes[i].file = fileJson
                   } else {
                     state.DisplayQuotes[i].timestamp = item.timestamp
@@ -2577,12 +3341,11 @@ const mutations = {
   HideQuote(state) {
     state.DisplayQuotes = []
   },
-  FetchFile(state, payload) {
+  FetchBulletinFile(state, payload) {
     let file = payload.file
     let SQL = `SELECT * FROM FILES WHERE sha1 = "${file.SHA1}"`
     state.DB.get(SQL, (err, item) => {
       if (err) {
-        //never go here
         console.log(err)
       } else {
         if (item != null) {
@@ -2608,7 +3371,7 @@ const mutations = {
             })
           } else {
             //not saved
-            let strJson = GenBulletinFileRequest(file.SHA1, item.current_chunk, payload.relay1_address)
+            let strJson = GenBulletinFileRequest(file.SHA1, item.current_chunk, payload.relay_address)
             state.WS.send(strJson)
           }
         } else {
@@ -2618,7 +3381,7 @@ const mutations = {
             if (err) {
               console.log(err)
             } else {
-              let strJson = GenBulletinFileRequest(file.SHA1, -1, payload.relay1_address)
+              let strJson = GenBulletinFileRequest(file.SHA1, -1, payload.relay_address)
               state.WS.send(strJson)
             }
           })
@@ -2908,6 +3671,49 @@ const mutations = {
         break
       }
     }
+  },
+  FetchGroupFile(state, payload) {
+    let file = payload.file
+    let SQL = `SELECT * FROM FILES WHERE sha1 = "${file.SHA1}"`
+    state.DB.get(SQL, (err, item) => {
+      if (err) {
+        console.log(err)
+      } else {
+        if (item != null) {
+          if (item.saved == true) {
+            //already saved
+            SQL = `UPDATE GROUP_MESSAGES SET file_saved = true WHERE file_sha1 = "${file.SHA1}"`
+            state.DB.run(SQL, err => {
+              if (err) {
+                console.log(err)
+              } else {
+                //update bulletin file button
+                for (let i = state.Messages.length - 1; i >= 0; i--) {
+                  if (state.Messages[i].is_file == true && file.SHA1 == state.Messages[i].file.SHA1) {
+                    state.Messages[i].file_saved = true
+                  }
+                }
+              }
+            })
+          } else {
+            //not saved
+            let strJson = GenGroupFileRequest(file.SHA1, item.current_chunk, payload.address)
+            state.WS.send(strJson)
+          }
+        } else {
+          SQL = `INSERT INTO FILES (sha1, name, ext, size, chunk, saved, current_chunk, created_at)
+            VALUES ('${file.SHA1}', '${file.Name}', '${file.Ext}', ${file.Size}, ${file.Chunk}, false, -1, ${Date.now()})`
+          state.DB.run(SQL, err => {
+            if (err) {
+              console.log(err)
+            } else {
+              let strJson = GenGroupFileRequest(file.SHA1, -1, payload.address)
+              state.WS.send(strJson)
+            }
+          })
+        }
+      }
+    })
   }
 }
 
@@ -2967,137 +3773,118 @@ const actions = {
     }
   },
   //private
-  DeliverMessage({ commit }, payload) {
-    //compose message
-    let key = payload.chatKey.slice(0, 32)
-    let iv = payload.chatKey.slice(32, 48)
-    return new Promise(function(resolve, reject) {
-      //get pair message not confirmed
-      let SQL = `SELECT * FROM MESSAGES WHERE sour_address = '${state.CurrentSession}' AND confirmed = false ORDER BY sequence ASC LIMIT 8`
-      state.DB.all(SQL, (err, items) => {
-        if (err) {
-          console.log(err);
-          reject();
-        } else {
-          let pairHash = []
-          for (let i = items.length - 1; i >= 0; i--) {
-            pairHash.push(items[i].hash)
-          }
-
-          let json = {
-            "Action": state.ActionCode.ChatMessage,
-            "Sequence": state.CurrentMessageSequence + 1,
-            "PreHash": state.CurrentMessageHash,
-            "PairHash": pairHash,
-            "Content": encrypt(key, iv, payload.content),
-            "To": payload.address,
-            "Timestamp": payload.timestamp,
-            "PublicKey": state.PublicKey
-          }
-          let sig = sign(JSON.stringify(json), state.PrivateKey)
-          json.Signature = sig
-          let strJson = JSON.stringify(json)
-          let hash = quarterSHA512(strJson)
-
-          //save message
-          SQL = `INSERT INTO MESSAGES (dest_address, sequence, pre_hash, content, timestamp, json, created_at, readed, hash)
-            VALUES ('${payload.address}', ${state.CurrentMessageSequence + 1}, '${state.CurrentMessageHash}', '${payload.content}', '${payload.timestamp}', '${strJson}', '${payload.timestamp}', true, '${hash}')`
-
-          state.DB.run(SQL, err => {
-            if (err) {
-              console.log(err)
-              reject();
-            } else {
-              state.WS.send(strJson)
-              state.Messages.push({ "address": state.Address, "timestamp": payload.timestamp, "created_at": payload.timestamp, 'sequence': state.CurrentMessageSequence + 1, "content": payload.content, 'confirmed': false, 'hash': hash })
-              state.CurrentMessageSequence += 1
-              state.CurrentMessageHash = hash
-
-              SQL = `UPDATE MESSAGES SET confirmed = true WHERE sour_address = '${payload.address}' AND hash IN (${Array2Str(pairHash)})`
-              state.DB.run(SQL, err => {
-                if (err) {
-                  console.log(err)
-                  reject();
-                } else {
-                  for (let i = state.Messages.length - 1; i >= 0; i--) {
-                    if (pairHash.includes(state.Messages[i].hash)) {
-                      state.Messages[i].confirmed = true
-                    }
-                  }
-                  resolve();
-                }
-              })
-            }
-          })
-        }
-      })
-
-    })
+  DeliverTextMessage({ commit }, payload) {
+    SendTextMessage(payload.chatKey, payload.content, payload.address, payload.timestamp, false)
   },
-  //group
-  DeliverGroupMessage({ commit }, payload) {
-    let group_hash = payload.group_hash
-    //get pair message not confirmed
-    return new Promise(function(resolve, reject) {
-      let SQL = `SELECT * FROM GROUP_MESSAGES WHERE group_hash = '${state.CurrentSession}' AND sour_address != '${state.Address}' ORDER BY created_at DESC`
+  DeliverFileMessage({ commit }, payload) {
+    //base=name+ext
+    let fileName = payload.pathJson["name"]
+    let fileExt = payload.pathJson["ext"]
+    let fileSize = payload.size
+    let fileChunk = Math.ceil(fileSize / ChunkSize)
+    let sha1Hasher = crypto.createHash("sha1")
+    let stream = fs.createReadStream(payload.fileToPublish)
+    stream.on('data', function(chunk) {
+      sha1Hasher.update(chunk)
+      //ing效果开始
+    })
+    stream.on('end', function() {
+      let sha1 = sha1Hasher.digest('hex').toUpperCase()
+      let fileJson = { "Name": fileName, "Ext": fileExt, "Size": fileSize, "Chunk": fileChunk, "SHA1": sha1 }
+      let SQL = `SELECT * FROM FILES WHERE sha1 = "${sha1}" AND saved = true`
       state.DB.get(SQL, (err, item) => {
         if (err) {
           console.log(err)
-          reject();
         } else {
-          let json = null
-          if (item == null) {
-            json = {
-              "ObjectType": state.ObjectType.GroupMessage,
-              "GroupHash": group_hash,
-              "Sequence": state.CurrentGroupMessageSequence + 1,
-              "PreHash": state.CurrentGroupMessageHash,
-              "Content": payload.content,
-              "Timestamp": payload.timestamp,
-              "PublicKey": state.PublicKey
-            }
+          if (item != null) {
+            //file already exist
+            SendTextMessage(payload.chatKey, JSON.stringify(fileJson), payload.address, payload.timestamp, true)
           } else {
-            json = {
-              "ObjectType": state.ObjectType.GroupMessage,
-              "GroupHash": group_hash,
-              "Sequence": state.CurrentGroupMessageSequence + 1,
-              "PreHash": state.CurrentGroupMessageHash,
-              "Confirm": { "Address": item.sour_address, "Sequence": item.sequence, "Hash": item.hash },
-              "Content": payload.content,
-              "Timestamp": payload.timestamp,
-              "PublicKey": state.PublicKey
-            }
+            let fileDir = FileDir(sha1)
+            mkdirs(fileDir, (err) => {
+              if (err) {
+                throw err
+              } else {
+                let filePath = FilePath(sha1)
+                fs.copyFile(payload.fileToPublish, filePath, (err) => {
+                  if (err) {
+                    throw err
+                  } else {
+                    //file saved
+                    let SQL = `INSERT INTO FILES (sha1, name, ext, size, chunk, saved, created_at)
+                      VALUES ('${sha1}', '${fileName}', '${fileExt}', ${fileSize}, ${fileChunk}, true, ${payload.timestamp})`
+                    state.DB.run(SQL, err => {
+                      if (err) {
+                        console.log(err)
+                      } else {
+                        SendTextMessage(payload.chatKey, JSON.stringify(fileJson), payload.address, payload.timestamp, true)
+                      }
+                    })
+                  }
+                })
+              }
+            })
           }
-
-          let sig = sign(JSON.stringify(json), state.PrivateKey)
-          json.Signature = sig
-
-          let strJson = JSON.stringify(json)
-          let hash = quarterSHA512(strJson)
-
-          //save message
-          SQL = `INSERT INTO GROUP_MESSAGES (group_hash, sour_address, sequence, pre_hash, content, timestamp, json, created_at, hash, readed)
-            VALUES ('${group_hash}', '${state.Address}', ${state.CurrentGroupMessageSequence + 1}, '${state.CurrentGroupMessageHash}', '${payload.content}', '${payload.timestamp}', '${strJson}', '${payload.timestamp}', '${hash}', true)`
-
-          state.DB.run(SQL, err => {
-            if (err) {
-              console.log(err)
-              reject();
-            } else {
-              state.CurrentGroupMessageSequence += 1
-              state.CurrentGroupMessageHash = hash
-
-              state.Messages.push({ "address": state.Address, "timestamp": payload.timestamp, "created_at": payload.timestamp, 'sequence': state.CurrentGroupMessageSequence, "content": payload.content, 'hash': hash })
-
-              BroadcastGroupMessage(json);
-              resolve();
-            }
-          })
         }
       })
-
     })
-
+  },
+  //group
+  DeliverGroupTextMessage({ commit }, payload) {
+    SendGroupTextMessage(payload.group_hash, payload.content, payload.timestamp, false)
+  },
+  DeliverGroupFileMessage({ commit }, payload) {
+    //base=name+ext
+    let fileName = payload.pathJson["name"]
+    let fileExt = payload.pathJson["ext"]
+    let fileSize = payload.size
+    let fileChunk = Math.ceil(fileSize / ChunkSize)
+    let sha1Hasher = crypto.createHash("sha1")
+    let stream = fs.createReadStream(payload.fileToPublish)
+    stream.on('data', function(chunk) {
+      sha1Hasher.update(chunk)
+      //ing效果开始
+    })
+    stream.on('end', function() {
+      let sha1 = sha1Hasher.digest('hex').toUpperCase()
+      let fileJson = { "Name": fileName, "Ext": fileExt, "Size": fileSize, "Chunk": fileChunk, "SHA1": sha1 }
+      let SQL = `SELECT * FROM FILES WHERE sha1 = "${sha1}" AND saved = true`
+      state.DB.get(SQL, (err, item) => {
+        if (err) {
+          console.log(err)
+        } else {
+          if (item != null) {
+            //file already exist
+            SendGroupTextMessage(payload.group_hash, JSON.stringify(fileJson), payload.timestamp, true)
+          } else {
+            let fileDir = FileDir(sha1)
+            mkdirs(fileDir, (err) => {
+              if (err) {
+                throw err
+              } else {
+                let filePath = FilePath(sha1)
+                fs.copyFile(payload.fileToPublish, filePath, (err) => {
+                  if (err) {
+                    throw err
+                  } else {
+                    //file saved
+                    let SQL = `INSERT INTO FILES (sha1, name, ext, size, chunk, saved, created_at)
+                      VALUES ('${sha1}', '${fileName}', '${fileExt}', ${fileSize}, ${fileChunk}, true, ${payload.timestamp})`
+                    state.DB.run(SQL, err => {
+                      if (err) {
+                        console.log(err)
+                      } else {
+                        SendGroupTextMessage(payload.group_hash, JSON.stringify(fileJson), payload.timestamp, true)
+                      }
+                    })
+                  }
+                })
+              }
+            })
+          }
+        }
+      })
+    })
   },
   //bulletin board => BB
   LoadBBs({ commit }, payload) {
@@ -3134,10 +3921,10 @@ const actions = {
     commit('SwitchBBSession', payload)
     SyncFollowBulletin(payload)
   },
-  PublishBulletin({ commit }, payload) {
+  PublishTextBulletin({ commit }, payload) {
     PublishBulletinContent(payload.content, false)
   },
-  PublishBulletinFile({ commit }, payload) {
+  PublishFileBulletin({ commit }, payload) {
     //base=name+ext
     let fileName = payload.pathJson["name"]
     let fileExt = payload.pathJson["ext"]
@@ -3161,11 +3948,13 @@ const actions = {
             //file already exist
             PublishBulletinContent(JSON.stringify(fileJson), true)
           } else {
-            mkdirs(`./data/${state.Address}/${sha1.substr(0,3)}/${sha1.substr(3,3)}/`, (err) => {
+            let fileDir = FileDir(sha1)
+            mkdirs(fileDir, (err) => {
               if (err) {
                 throw err
               } else {
-                fs.copyFile(payload.fileToPublish, `./data/${state.Address}/${sha1.substr(0,3)}/${sha1.substr(3,3)}/${sha1}`, (err) => {
+                let filePath = FilePath(sha1)
+                fs.copyFile(payload.fileToPublish, filePath, (err) => {
                   if (err) {
                     throw err
                   } else {
@@ -3269,7 +4058,12 @@ const getters = {
               if (item.sour_address != null) {
                 sour_address = item.sour_address
               }
-              state.Messages.push({ 'address': sour_address, 'timestamp': item.timestamp, 'created_at': item.created_at, 'sequence': item.sequence, 'content': item.content, 'confirmed': item.confirmed, 'hash': item.hash })
+              if (item.is_file) {
+                let fileJson = JSON.parse(item.content)
+                state.Messages.push({ "is_private": true, 'address': sour_address, 'timestamp': item.timestamp, 'created_at': item.created_at, 'sequence': item.sequence, 'content': item.content, 'confirmed': item.confirmed, 'hash': item.hash, "is_file": item.is_file, "file_saved": item.file_saved, "file": fileJson })
+              } else {
+                state.Messages.push({ "is_private": true, 'address': sour_address, 'timestamp': item.timestamp, 'created_at': item.created_at, 'sequence': item.sequence, 'content': item.content, 'confirmed': item.confirmed, 'hash': item.hash })
+              }
             }
             return state.Messages
           }
@@ -3282,7 +4076,12 @@ const getters = {
           } else {
             items.reverse()
             for (const item of items) {
-              state.Messages.push({ 'address': item.sour_address, 'timestamp': item.timestamp, 'created_at': item.created_at, 'sequence': item.sequence, 'content': item.content, 'hash': item.hash })
+              if (item.is_file) {
+                let fileJson = JSON.parse(item.content)
+                state.Messages.push({ "is_private": false, 'address': item.sour_address, 'timestamp': item.timestamp, 'created_at': item.created_at, 'sequence': item.sequence, 'content': item.content, 'hash': item.hash, "is_file": item.is_file, "file_saved": item.file_saved, "file": fileJson })
+              } else {
+                state.Messages.push({ "is_private": false, 'address': item.sour_address, 'timestamp': item.timestamp, 'created_at': item.created_at, 'sequence': item.sequence, 'content': item.content, 'hash': item.hash })
+              }
             }
             return state.Messages
           }
@@ -3317,7 +4116,7 @@ const getters = {
           for (const item of items) {
             if (item.is_file) {
               let fileJson = JSON.parse(item.content)
-              state.Bulletins.push({ "address": item.address, 'timestamp': item.timestamp, 'created_at': item.created_at, 'sequence': item.sequence, 'is_file': item.is_file, 'file_saved': item.file_saved, 'relay1_address': item.relay1_address, 'file': fileJson, 'hash': item.hash, 'quote_size': item.quote_size })
+              state.Bulletins.push({ "address": item.address, 'timestamp': item.timestamp, 'created_at': item.created_at, 'sequence': item.sequence, 'is_file': item.is_file, 'file_saved': item.file_saved, 'relay_address': item.relay_address, 'file': fileJson, 'hash': item.hash, 'quote_size': item.quote_size })
             } else {
               state.Bulletins.push({ "address": item.address, 'timestamp': item.timestamp, 'created_at': item.created_at, 'sequence': item.sequence, 'content': item.content, 'hash': item.hash, 'quote_size': item.quote_size })
             }

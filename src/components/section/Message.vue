@@ -13,22 +13,32 @@
       </div>
     </div>
     <div class="message-textWrapper">
-      <div :class="[{'message-confirm':message.confirmed}, 'message-text']">{{message.content}}</div>
+      <div v-if="message.is_file" class="[{'message-confirm':message.confirmed}, 'message-text']">
+        Name:{{message.file.Name}}{{message.file.Ext}}<br>
+        Size:{{message.file.Size}}<br>
+        Chunk:{{message.file.Chunk}}<br>
+        SHA1:{{message.file.SHA1}}<br>
+        <h5 v-show="message.file_saved" class="message-quote-link" @click="openFile(message.file.SHA1)">[打开]</h5>
+        <h5 v-show="message.file_saved" class="message-quote-link" @click="openDir(message.file.SHA1)">[打开文件夹]</h5>
+        <h5 v-show="!message.file_saved" class="message-quote-link">{{message.file_percent}}</h5>
+        <h5 v-show="!message.file_saved" class="message-quote-link" @click="fetchFile(message.is_private, message.address, message.file)">[获取]</h5>
+      </div>
+      <div v-else class="[{'message-confirm':message.confirmed}, 'message-text']" v-html="message.content"></div>
     </div>
   </li>
 </template>
 <script>
 import { mapActions, mapGetters } from 'vuex'
 
-function insertAfter(newNode, referenceNode) {
-  referenceNode.parentNode.insertBefore(newNode, referenceNode.nextSibling);
-}
+const shell = window.require('electron').shell
+const fs = window.require("fs")
+const path = window.require("path")
 
 export default {
   name: 'Message',
   data: function() {
     return {
-      myAddress: this.$store.state.OXO.Address
+      address: this.$store.state.OXO.Address
     }
   },
   props: {
@@ -39,27 +49,53 @@ export default {
       getNameByAddress: 'getNameByAddress'
     }),
     myline: function() {
-      return this.myAddress == this.message.address ? 'myline' : '';
+      return this.address == this.message.address ? 'myline' : '';
     },
     toolTipDir: function() {
-      return this.myAddress == this.message.address ? 'left' : 'right';
+      return this.address == this.message.address ? 'left' : 'right';
     }
   },
   mounted() {
-    /*
-    //what the fuck!
-    console.log(`mounted#${this.message.sequence}#${this.message.content}`)
-    let content = this.message.content
-    if (content.length > 22 && content.substring(0, 22) == 'data:image/png;base64,') {
-      let newImg = document.createElement("img")
-      newImg.src = content
-      newImg.width = 447
-      this.$refs.content.appendChild(newImg)
-    } else {
-      content = content.replace(/\r/ig, "").replace(/\n/ig, "<br>");
-      this.$refs.content.innerHTML = content;
+
+  },
+  methods: {
+    openFile() {
+      let sha1 = this.message.file.SHA1
+      let tmpFile = `./data/tmp/${sha1}${this.message.file.Ext}`
+      fs.copyFile(`./data/${this.address}/${sha1.substr(0,3)}/${sha1.substr(3,3)}/${sha1}`, tmpFile, (err) => {
+        if (err) {
+          throw err
+        } else {
+          shell.openItem(path.resolve(tmpFile))
+        }
+      })
+    },
+    openDir() {
+      let sha1 = this.message.file.SHA1
+      let tmpFile = `./data/tmp/${sha1}${this.message.file.Ext}`
+      fs.copyFile(`./data/${this.address}/${sha1.substr(0,3)}/${sha1.substr(3,3)}/${sha1}`, tmpFile, (err) => {
+        if (err) {
+          throw err
+        } else {
+          shell.showItemInFolder(path.resolve(tmpFile))
+        }
+      })
+    },
+    fetchFile(is_private, address, file) {
+      if (is_private) {
+        this.$store.commit({
+          type: 'FetchPrivateFile',
+          file: file,
+          address: address
+        })
+      } else {
+        this.$store.commit({
+          type: 'FetchGroupFile',
+          file: file,
+          address: address
+        })
+      }
     }
-    */
   }
 }
 

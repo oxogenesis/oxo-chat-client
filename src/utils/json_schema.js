@@ -119,7 +119,7 @@ let BulletinRequestSchema = {
   }
 }
 
-let BulletinFileSchema = {
+let FileChunkSchema = {
   "type": "object",
   "required": ["ObjectType", "SHA1", "Chunk", "Content"],
   "maxProperties": 4,
@@ -139,7 +139,7 @@ let BulletinFileSchema = {
   }
 }
 
-let BulletinFileRequestSchema = {
+let FileRequestSchema = {
   "type": "object",
   "required": ["Action", "SHA1", "CurrentChunk", "To", "Timestamp", "PublicKey", "Signature"],
   "maxProperties": 7,
@@ -408,12 +408,9 @@ let GroupDHSchema = {
 
 let GroupMessageSchema = {
   "type": "object",
-  "required": ["ObjectType", "GroupHash", "Sequence", "PreHash", "Content", "Timestamp", "PublicKey", "Signature"],
-  "maxProperties": 9,
+  "required": ["GroupHash", "Sequence", "PreHash", "Content", "Timestamp", "PublicKey", "Signature"],
+  "maxProperties": 8,
   "properties": {
-    "ObjectType": {
-      "type": "number"
-    },
     "GroupHash": {
       "type": "string"
     },
@@ -511,7 +508,7 @@ var vDeclare = ajv.compile(DeclareSchema)
 var vObjectResponseSchema = ajv.compile(ObjectResponseSchema)
 
 var vBulletinRequestSchema = ajv.compile(BulletinRequestSchema)
-var vBulletinFileRequestSchema = ajv.compile(BulletinFileRequestSchema)
+var vFileRequestSchema = ajv.compile(FileRequestSchema)
 
 var vChatMessageSchema = ajv.compile(ChatMessageSchema)
 var vChatSyncSchema = ajv.compile(ChatSyncSchema)
@@ -526,7 +523,7 @@ function checkJsonSchema(strJson) {
   if (typeof strJson == "string") {
     try {
       let json = JSON.parse(strJson)
-      if (vObjectResponseSchema(json) || vBulletinRequestSchema(json) || vBulletinFileRequestSchema(json) || vChatMessageSchema(json) || vChatSyncSchema(json) || vChatDHSchema(json) || vDeclare(json) || vGroupManageSyncSchema(json) || vGroupDHSchema(json) || vGroupMessageSyncSchema(json) || vGroupRequestSchema(json)) {
+      if (vObjectResponseSchema(json) || vBulletinRequestSchema(json) || vFileRequestSchema(json) || vChatMessageSchema(json) || vChatSyncSchema(json) || vChatDHSchema(json) || vDeclare(json) || vGroupManageSyncSchema(json) || vGroupDHSchema(json) || vGroupMessageSyncSchema(json) || vGroupRequestSchema(json)) {
         return json
       } else {
         return false
@@ -556,16 +553,16 @@ function checkBulletinSchema(json) {
   }
 }
 
-var vBulletinFileSchema = ajv.compile(BulletinFileSchema)
+var vFileChunkSchema = ajv.compile(FileChunkSchema)
 
-function checkBulletinFileSchema(json) {
+function checkFileChunkSchema(json) {
   //console.log(json)
   try {
-    if (vBulletinFileSchema(json)) {
-      console.log(`BulletinFile schema ok`)
+    if (vFileChunkSchema(json)) {
+      console.log(`File schema ok`)
       return true
     } else {
-      console.log(`BulletinFile schema invalid`)
+      console.log(`File schema invalid`)
       return false
     }
   } catch (e) {
@@ -641,7 +638,7 @@ function checkFileSchema(json) {
 module.exports = {
   checkJsonSchema,
   checkBulletinSchema,
-  checkBulletinFileSchema,
+  checkFileChunkSchema,
   checkGroupManageSchema,
   checkGroupRequestSchema,
   checkGroupMessageSchema,
