@@ -519,18 +519,9 @@ var vGroupDHSchema = ajv.compile(GroupDHSchema)
 var vGroupMessageSyncSchema = ajv.compile(GroupMessageSyncSchema)
 var vGroupRequestSchema = ajv.compile(GroupRequestSchema)
 
-function checkJsonSchema(strJson) {
-  if (typeof strJson == "string") {
-    try {
-      let json = JSON.parse(strJson)
-      if (vObjectResponseSchema(json) || vBulletinRequestSchema(json) || vFileRequestSchema(json) || vChatMessageSchema(json) || vChatSyncSchema(json) || vChatDHSchema(json) || vDeclare(json) || vGroupManageSyncSchema(json) || vGroupDHSchema(json) || vGroupMessageSyncSchema(json) || vGroupRequestSchema(json)) {
-        return json
-      } else {
-        return false
-      }
-    } catch (e) {
-      return false
-    }
+function checkJsonSchema(json) {
+  if (vObjectResponseSchema(json) || vBulletinRequestSchema(json) || vFileRequestSchema(json) || vChatMessageSchema(json) || vChatSyncSchema(json) || vChatDHSchema(json) || vDeclare(json) || vGroupManageSyncSchema(json) || vGroupDHSchema(json) || vGroupMessageSyncSchema(json) || vGroupRequestSchema(json)) {
+    return true
   } else {
     return false
   }

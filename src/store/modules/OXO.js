@@ -2848,60 +2848,73 @@ function Conn() {
         console.log('Received: ', event.data)
       }
       */
-      let json = checkJsonSchema(event.data)
-      if (json) {
-        //check receiver is me
-        if (json.To != state.Address) {
-          console.log('receiver is not me...')
-          return
-        }
+      try {
+        let json = JSON.parse(event.data)
 
-        //verify signature
-        if (VerifyJsonSignature(json) == false) {
-          return
-        }
-
-        if (json.Action == state.ActionCode.ChatDH) {
-          HandleChatDH(json)
-        } else if (json.Action == state.ActionCode.ChatMessage) {
-          HandleChatMessage(json)
-        } else if (json.Action == state.ActionCode.ChatSync) {
-          HandleChatSync(json)
-        } else if (json.Action == state.ActionCode.BulletinRequest) {
-          HandleBulletinRequest(json)
-        } else if (json.Action == state.ActionCode.BulletinFileRequest) {
-          HandleBulletinFileRequest(json)
-        } else if (json.Action == state.ActionCode.PrivateFileRequest) {
-          HandlePrivateFileRequest(json)
-        } else if (json.Action == state.ActionCode.GroupFileRequest) {
-          HandleGroupFileRequest(json)
-        } else if (json.Action == state.ActionCode.ObjectResponse) {
+        //save bulletin from server cache
+        if (json.ObjectType == state.ObjectType.Bulletin && checkBulletinSchema(json)) {
           let address = oxoKeyPairs.deriveAddress(json.PublicKey)
-          let objectJson = json.Object
-          if (json.Object.ObjectType == state.ObjectType.Bulletin && checkBulletinSchema(objectJson)) {
-            SaveBulletin(address, objectJson)
-          } else if (json.Object.ObjectType == state.ObjectType.BulletinFile && checkFileChunkSchema(objectJson)) {
-            SaveBulletinFile(address, objectJson)
-          } else if (json.Object.ObjectType == state.ObjectType.PrivateFile && checkFileChunkSchema(objectJson)) {
-            SavePrivateFile(address, objectJson)
-          } else if (json.Object.ObjectType == state.ObjectType.GroupFile && checkFileChunkSchema(objectJson)) {
-            SaveGroupFile(address, objectJson)
-          } else if (json.Object.ObjectType == state.ObjectType.GroupManage && checkGroupManageSchema(objectJson)) {
-            SaveGroupManage(address, objectJson)
-          } else if (json.Object.ObjectType == state.ObjectType.GroupMessage) {
-            SaveGroupMessage(address, objectJson)
-          }
-        } else if (json.Action == state.ActionCode.GroupRequest) {
-          HandleGroupRequest(json)
-        } else if (json.Action == state.ActionCode.GroupManageSync) {
-          HandleGroupManageSync(json)
-        } else if (json.Action == state.ActionCode.GroupDH) {
-          HandleGroupDH(json)
-        } else if (json.Action == state.ActionCode.GroupMessageSync) {
-          HandleGroupMessageSync(json)
+          SaveBulletin(address, json)
+          return
         }
-      } else {
-        console.log("json schema invalid...")
+
+        //handle message send To me
+        if (checkJsonSchema(json)) {
+          //check receiver is me
+          if (json.To != state.Address) {
+            console.log('receiver is not me...')
+            return
+          }
+
+          //verify signature
+          if (VerifyJsonSignature(json) == false) {
+            return
+          }
+
+          if (json.Action == state.ActionCode.ChatDH) {
+            HandleChatDH(json)
+          } else if (json.Action == state.ActionCode.ChatMessage) {
+            HandleChatMessage(json)
+          } else if (json.Action == state.ActionCode.ChatSync) {
+            HandleChatSync(json)
+          } else if (json.Action == state.ActionCode.BulletinRequest) {
+            HandleBulletinRequest(json)
+          } else if (json.Action == state.ActionCode.BulletinFileRequest) {
+            HandleBulletinFileRequest(json)
+          } else if (json.Action == state.ActionCode.PrivateFileRequest) {
+            HandlePrivateFileRequest(json)
+          } else if (json.Action == state.ActionCode.GroupFileRequest) {
+            HandleGroupFileRequest(json)
+          } else if (json.Action == state.ActionCode.ObjectResponse) {
+            let address = oxoKeyPairs.deriveAddress(json.PublicKey)
+            let objectJson = json.Object
+            if (objectJson.ObjectType == state.ObjectType.Bulletin && checkBulletinSchema(objectJson)) {
+              SaveBulletin(address, objectJson)
+            } else if (objectJson.ObjectType == state.ObjectType.BulletinFile && checkFileChunkSchema(objectJson)) {
+              SaveBulletinFile(address, objectJson)
+            } else if (objectJson.ObjectType == state.ObjectType.PrivateFile && checkFileChunkSchema(objectJson)) {
+              SavePrivateFile(address, objectJson)
+            } else if (objectJson.ObjectType == state.ObjectType.GroupFile && checkFileChunkSchema(objectJson)) {
+              SaveGroupFile(address, objectJson)
+            } else if (objectJson.ObjectType == state.ObjectType.GroupManage && checkGroupManageSchema(objectJson)) {
+              SaveGroupManage(address, objectJson)
+            } else if (objectJson.ObjectType == state.ObjectType.GroupMessage) {
+              SaveGroupMessage(address, objectJson)
+            }
+          } else if (json.Action == state.ActionCode.GroupRequest) {
+            HandleGroupRequest(json)
+          } else if (json.Action == state.ActionCode.GroupManageSync) {
+            HandleGroupManageSync(json)
+          } else if (json.Action == state.ActionCode.GroupDH) {
+            HandleGroupDH(json)
+          } else if (json.Action == state.ActionCode.GroupMessageSync) {
+            HandleGroupMessageSync(json)
+          }
+        } else {
+          console.log("json schema invalid...")
+          return
+        }
+      } catch (e) {
         return
       }
     })
