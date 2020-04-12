@@ -1,13 +1,14 @@
 后续可能还会进行扩展：局域网内数据同步功能，数据中继远程系统互联机制，本地系统同时连接多个远程中继，消息内容格式扩展等。
 
+# 使用教程
+**[使用教程](https://github.com/oxogenesis/oxo-chat-tutorial)**  
 
+# 代码
+**[客户端](https://github.com/oxogenesis/oxo-chat-client)**  
+**[服务端](https://github.com/oxogenesis/oxo-chat-server)**  
 
-# code
-**[client](https://github.com/oxogenesis/oxo-chat-client)**  
-**[server](https://github.com/oxogenesis/oxo-chat-server)**  
-
-# release
-**[download page](https://github.com/oxogenesis/oxo-chat-client/releases)**  
+# 安装包
+**[安装包](https://github.com/oxogenesis/oxo-chat-client/releases)**  
 
 **v0.0.2 群聊**（群主主控模式的点对点群聊）  
 **v0.0.1 公告、私聊**
@@ -20,9 +21,9 @@
 
 
 # public server
-## online accounts
+## website(online account、bulletin cache)
 * **https://oxo-chat-server.com**  
-## chat service
+## service
 * **wss://ru.oxo-chat-server.com**  
 
 I would like to point a subdomain to your ip, if you want to provide service for the public.  
