@@ -5,6 +5,7 @@
 
 # 代码
 **[客户端](https://github.com/oxogenesis/oxo-chat-client)**  
+**[路由器](https://github.com/oxogenesis/oxo-chat-router)**  
 **[服务端](https://github.com/oxogenesis/oxo-chat-server)**  
 
 # 安装包
