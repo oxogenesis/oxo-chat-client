@@ -66,7 +66,18 @@ export default {
       return this.displayQuotes.length;
     }
   },
-  created() {},
+  created() {
+
+  },
+  mounted() {
+    this.$refs.list.addEventListener('scroll', () => {
+      if (this.$refs.list.scrollHeight - this.$refs.list.scrollTop === this.$refs.list.clientHeight) {
+        this.$store.commit({
+          type: 'LoadMoreBulletin'
+        })
+      }
+    }, false)
+  },
   methods: {
     publishTextBulletin() {
       if (this.content.trim() == "") {

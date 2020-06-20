@@ -3194,11 +3194,11 @@ const mutations = {
   },
   //chat
   LoadMoreMessage(state) {
+    let firstMessage = state.Messages[0]
+    if (firstMessage == null) {
+      return
+    }
     if (state.CurrentSession[0] == 'o') {
-      let firstMessage = state.Messages[0]
-      if (firstMessage == null) {
-        return
-      }
       let SQL = `SELECT * FROM MESSAGES WHERE (sour_address = '${state.CurrentSession}' OR dest_address = '${state.CurrentSession}') AND created_at < ${firstMessage.created_at} ORDER BY created_at DESC LIMIT 20`
       state.DB.all(SQL, (err, items) => {
         if (err) {
@@ -3214,10 +3214,6 @@ const mutations = {
         }
       })
     } else {
-      let firstMessage = state.Messages[0]
-      if (firstMessage == null) {
-        return
-      }
       let SQL = `SELECT * FROM GROUP_MESSAGES WHERE group_hash = '${state.CurrentSession}' AND created_at < ${firstMessage.created_at} ORDER BY created_at DESC LIMIT 20`
       state.DB.all(SQL, (err, items) => {
         if (err) {
@@ -3401,6 +3397,41 @@ const mutations = {
         }
       }
     })
+  },
+  LoadMoreBulletin(state) {
+    if (state.Bulletins.length == 0) {
+      return
+    }
+    let lastBulletin = state.Bulletins[state.Bulletins.length - 1]
+
+    let SQL = ''
+    if (state.CurrentBBSession == "*") {
+      let all = [state.Address]
+      for (let i = state.Follows.length - 1; i >= 0; i--) {
+        all.push(state.Follows[i])
+      }
+      SQL = `SELECT * FROM BULLETINS WHERE address in (${Array2Str(all)}) AND created_at < ${lastBulletin.created_at} ORDER BY created_at DESC LIMIT 20`
+    } else if (state.CurrentBBSession == "#") {
+      SQL = `SELECT * FROM BULLETINS WHERE address = '${state.Address}' AND created_at < ${lastBulletin.created_at} ORDER BY created_at DESC LIMIT 20`
+    } else {
+      SQL = `SELECT * FROM BULLETINS WHERE address = '${state.CurrentBBSession}' AND created_at < ${lastBulletin.created_at} ORDER BY created_at DESC LIMIT 20`
+    }
+
+    state.DB.all(SQL, (err, items) => {
+      if (err) {
+        console.log(err)
+      } else {
+        for (const item of items) {
+          if (item.is_file) {
+            let fileJson = JSON.parse(item.content)
+            state.Bulletins.push({ "address": item.address, 'timestamp': item.timestamp, 'created_at': item.created_at, 'sequence': item.sequence, 'is_file': item.is_file, 'file_saved': item.file_saved, 'relay_address': item.relay_address, 'file': fileJson, 'hash': item.hash, 'quote_size': item.quote_size })
+          } else {
+            state.Bulletins.push({ "address": item.address, 'timestamp': item.timestamp, 'created_at': item.created_at, 'sequence': item.sequence, 'content': item.content, 'hash': item.hash, 'quote_size': item.quote_size })
+          }
+        }
+      }
+    })
+    return state.Bulletins
   },
   //group
   CreateGroup(state, payload) {
