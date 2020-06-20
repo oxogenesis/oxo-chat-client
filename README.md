@@ -11,9 +11,6 @@
 # 安装包
 **[安装包](https://github.com/oxogenesis/oxo-chat-client/releases)**  
 
-**v0.0.2 群聊**（群主主控模式的点对点群聊）  
-**v0.0.1 公告、私聊**
-
 # wiki
 **[1.关于密码学](https://github.com/oxogenesis/oxo-chat-client/wiki/1.%E5%85%B3%E4%BA%8E%E5%AF%86%E7%A0%81%E5%AD%A6)**  
 **[2.系统描述](https://github.com/oxogenesis/oxo-chat-client/wiki/2.%E7%B3%BB%E7%BB%9F%E6%8F%8F%E8%BF%B0)**  
