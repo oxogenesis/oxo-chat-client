@@ -85,6 +85,11 @@ export default new Router({
       component: require('@/components/AboutUs').default
     },
     {
+      path: '/Verify',
+      name: 'Verify',
+      component: require('@/components/Verify').default
+    },
+    {
       path: '*',
       redirect: '/'
     }

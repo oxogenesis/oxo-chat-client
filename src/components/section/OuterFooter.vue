@@ -5,6 +5,7 @@
       <p>@copyright 2019-2020</p>
       <p>
         <router-link class="links" to="AboutUs">关于</router-link>
+        <router-link class="links" to="Verify">校验Json</router-link>
       </p>
     </footer>
   </div>
