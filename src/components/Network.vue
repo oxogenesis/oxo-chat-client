@@ -29,7 +29,7 @@
 import { mapActions, mapMutations, mapGetters } from 'vuex'
 
 export default {
-  name: "network",
+  name: "Network",
   data() {
     return {
       address: this.$store.state.OXO.Address,

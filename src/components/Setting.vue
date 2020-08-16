@@ -7,13 +7,16 @@
           <AccountInfo />
         </el-tab-pane>
         <el-tab-pane label="网络">
-          <network />
+          <Network />
         </el-tab-pane>
         <el-tab-pane label="联系人">
-          <contact />
+          <Contact />
         </el-tab-pane>
         <el-tab-pane label="群组">
-          <group />
+          <Group />
+        </el-tab-pane>
+        <el-tab-pane label="公告">
+          <Bulletin />
         </el-tab-pane>
       </el-tabs>
     </div>
@@ -23,10 +26,11 @@
 <script>
 import HeaderSection from './section/HeaderSection.vue'
 import FooterSection from './section/FooterSection.vue'
-import network from './Network.vue'
-import contact from './Contact.vue'
-import group from './Group.vue'
 import AccountInfo from './AccountInfo.vue'
+import Network from './Network.vue'
+import Contact from './Contact.vue'
+import Group from './Group.vue'
+import Bulletin from './Bulletin.vue'
 
 export default {
   data() {
@@ -37,10 +41,11 @@ export default {
   components: {
     HeaderSection,
     FooterSection,
-    network,
-    contact,
-    group,
-    AccountInfo
+    AccountInfo,
+    Network,
+    Contact,
+    Group,
+    Bulletin
   }
 }
 

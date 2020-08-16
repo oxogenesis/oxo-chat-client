@@ -55,6 +55,11 @@ export default new Router({
       component: require('@/components/Group').default
     },
     {
+      path: '/Bulletin',
+      name: 'Bulletin',
+      component: require('@/components/Bulletin').default
+    },
+    {
       path: '/BBs',
       name: 'BBs',
       component: require('@/components/BBs').default

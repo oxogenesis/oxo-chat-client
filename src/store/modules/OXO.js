@@ -2948,7 +2948,9 @@ const mutations = {
 
     //util
     state.Init = true
-    state.DB.close()
+    if(state.DB != null){
+      state.DB.close()
+    }
     state.DB = null
     state.WS.close()
     state.WS = null
@@ -3432,6 +3434,28 @@ const mutations = {
       }
     })
     return state.Bulletins
+  },
+  SearchBulletin(state, payload) {
+    state.Bulletins = []
+    let regx = /^o[123456789abcdefghijkmnopqrstuvwxyzABCDEFGHJKLMNPQRSTUVWXYZ]{32,33}/
+    let rs = regx.exec(payload.q)
+    let SQL = ''
+    if (rs == null) {
+      SQL = `SELECT * FROM BULLETINS WHERE content like '%${payload.q}%' ORDER BY created_at DESC`
+    } else {
+      SQL = `SELECT * FROM BULLETINS WHERE address = '${payload.q}' ORDER BY created_at DESC`
+    }
+
+    state.DB.all(SQL, (err, items) => {
+      if (err) {
+        console.log(err)
+      } else {
+        for (const item of items) {
+          state.Bulletins.push({ "address": item.address, 'timestamp': item.timestamp, 'created_at': item.created_at, 'sequence': item.sequence, 'hash': item.hash, 'quote_size': item.quote_size })
+        }
+        return state.Bulletins
+      }
+    })
   },
   //group
   CreateGroup(state, payload) {
@@ -4175,6 +4199,9 @@ const getters = {
   },
   displayQuotes: (state) => {
     return state.DisplayQuotes
+  },
+  getSearchBulletins: (state) => {
+    return state.Bulletins
   }
 }
 

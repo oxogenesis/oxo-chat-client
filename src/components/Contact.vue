@@ -121,7 +121,7 @@ import HeaderSection from './section/HeaderSection.vue'
 import { mapActions, mapMutations, mapGetters } from 'vuex'
 
 export default {
-  name: "contact",
+  name: "Contact",
   data() {
     return {
       address: this.$store.state.OXO.Address,

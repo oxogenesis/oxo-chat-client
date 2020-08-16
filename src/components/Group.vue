@@ -85,7 +85,7 @@ let GroupRequestActionCode = {
 }
 
 export default {
-  name: "group",
+  name: "Group",
   data() {
     return {
       address: this.$store.state.OXO.Address,
