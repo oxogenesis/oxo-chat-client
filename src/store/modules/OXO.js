@@ -75,6 +75,8 @@ const state = {
   Bulletins: [],
   Quotes: [],
   DisplayQuotes: [],
+  SearchBulletins: [],
+  DisplayBulletins: [],
 
   //for group_hash => group_name
   Groups: {},
@@ -2948,7 +2950,7 @@ const mutations = {
 
     //util
     state.Init = true
-    if(state.DB != null){
+    if (state.DB != null) {
       state.DB.close()
     }
     state.DB = null
@@ -2988,6 +2990,8 @@ const mutations = {
     state.Bulletins = []
     state.Quotes = []
     state.DisplayQuotes = []
+    state.SearchBulletins = []
+    state.DisplayBulletins = []
 
     //group
     state.Groups = {}
@@ -3352,6 +3356,45 @@ const mutations = {
   HideQuote(state) {
     state.DisplayQuotes = []
   },
+  LoadBulletin(state, payload) {
+    state.DisplayBulletins = []
+    state.DisplayQuotes = []
+    let SQL = `SELECT * FROM BULLETINS WHERE hash = '${payload.hash}' `
+    state.DB.get(SQL, (err, item) => {
+      if (err) {
+        console.log(err)
+      } else {
+        if (item != null) {
+          //load from local db
+          state.DisplayBulletins[0] = {}
+          state.DisplayBulletins[0].address = item.address
+          state.DisplayBulletins[0].sequence = item.sequence
+          if (item.is_file) {
+            state.DisplayBulletins[0].timestamp = item.timestamp
+            state.DisplayBulletins[0].created_at = item.created_at
+            state.DisplayBulletins[0].quote_size = item.quote_size
+            state.DisplayBulletins[0].is_file = item.is_file
+            state.DisplayBulletins[0].file_saved = item.file_saved
+            state.DisplayBulletins[0].relay_address = item.relay_address
+            state.DisplayBulletins[0].file = fileJson
+          } else {
+            state.DisplayBulletins[0].timestamp = item.timestamp
+            state.DisplayBulletins[0].created_at = item.created_at
+            state.DisplayBulletins[0].quote_size = item.quote_size
+            state.DisplayBulletins[0].content = item.content
+          }
+
+          let json = JSON.parse(item.json)
+          for (let i = json.Quote.length - 1; i >= 0; i--) {
+            state.DisplayQuotes.push({ "address": json.Quote[i].Address, 'sequence': json.Quote[i].Sequence, 'hash': json.Quote[i].Hash })
+          }
+        }
+      }
+    })
+  },
+  HideBulletin(state) {
+    state.DisplayBulletins = []
+  },
   FetchBulletinFile(state, payload) {
     let file = payload.file
     let SQL = `SELECT * FROM FILES WHERE sha1 = "${file.SHA1}"`
@@ -3436,7 +3479,7 @@ const mutations = {
     return state.Bulletins
   },
   SearchBulletin(state, payload) {
-    state.Bulletins = []
+    state.SearchBulletins = []
     let regx = /^o[123456789abcdefghijkmnopqrstuvwxyzABCDEFGHJKLMNPQRSTUVWXYZ]{32,33}/
     let rs = regx.exec(payload.q)
     let SQL = ''
@@ -3451,9 +3494,9 @@ const mutations = {
         console.log(err)
       } else {
         for (const item of items) {
-          state.Bulletins.push({ "address": item.address, 'timestamp': item.timestamp, 'created_at': item.created_at, 'sequence': item.sequence, 'hash': item.hash, 'quote_size': item.quote_size })
+          state.SearchBulletins.push({ "address": item.address, 'timestamp': item.timestamp, 'created_at': item.created_at, 'sequence': item.sequence, 'hash': item.hash, 'quote_size': item.quote_size })
         }
-        return state.Bulletins
+        return state.SearchBulletins
       }
     })
   },
@@ -4200,8 +4243,12 @@ const getters = {
   displayQuotes: (state) => {
     return state.DisplayQuotes
   },
+  displayBulletins: (state) => {
+    console.log(`...${state.DisplayBulletins.length}`)
+    return state.DisplayBulletins
+  },
   getSearchBulletins: (state) => {
-    return state.Bulletins
+    return state.SearchBulletins
   }
 }
 

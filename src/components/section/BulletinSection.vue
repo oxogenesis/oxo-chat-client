@@ -22,12 +22,12 @@
         </el-form>
       </div>
       <ul class="bulletin-list" ref="list">
-        <bulletin v-for="(bulletin,index) in getBulletins" :bulletin="bulletin" :address="address" :key="index" :paShowEdit="false">
+        <bulletin v-for="(bulletin,index) in getBulletins" :bulletin="bulletin" :address="address" :key="index">
         </bulletin>
       </ul>
       <el-dialog ref="quote-list" title="当前引用列表" :visible.sync="dialogVisible" width="50%" @close='hideQuote()'>
         <ul class="quote-dialist">
-          <bulletin v-for="(bulletin,index) in displayQuotes" :bulletin="bulletin" :address="address" :key="index" :paShowEdit="showEdit" @changeShowEdit="changeShowEdit">
+          <bulletin v-for="(bulletin,index) in displayQuotes" :bulletin="bulletin" :address="address" :key="index">
           </bulletin>
         </ul>
       </el-dialog>
@@ -49,8 +49,7 @@ export default {
   data() {
     return {
       address: this.$store.state.OXO.Address,
-      content: '',
-      showEdit: true
+      content: ''
     }
   },
   props: {},
@@ -111,9 +110,6 @@ export default {
       this.$store.commit({
         type: 'HideQuote'
       })
-    },
-    changeShowEdit: function(onoff) {
-      this.showEdit = onoff;
     },
     publishFileBulletin() {
       let self = this

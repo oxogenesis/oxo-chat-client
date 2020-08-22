@@ -1,8 +1,6 @@
 <template>
-  <li class="bulletin-list-item">
+  <li>
     <h5 class="bulletin-author-name">{{ getNameByAddress(bulletin.address) }}#{{ bulletin.sequence }}</h5>
-    <h5 class="bulletin-quote-link" @click="addQuote(bulletin)">[引用]</h5>
-    <h5 v-if="bulletin.quote_size" class="bulletin-quote-showlink" @click="loadQuote(bulletin)">[显示引用]</h5>
     <div class="bulletin-time">
       {{ bulletin.timestamp | time }}
     </div>
@@ -16,7 +14,8 @@
       <h5 v-show="!bulletin.file_saved" class="bulletin-quote-link">{{bulletin.file_percent}}</h5>
       <h5 v-show="!bulletin.file_saved" class="bulletin-quote-link" @click="fetchFile(bulletin.file, bulletin.relay_address)">[获取]</h5>
     </div>
-    <div v-else class="bulletin-text" v-html="bulletin.content"></div>
+    <div v-else class="bulletin-text" v-html="bulletin.content">
+    </div>
   </li>
 </template>
 <script>
@@ -27,31 +26,19 @@ const fs = window.require("fs")
 const path = window.require("path")
 
 export default {
-  name: 'Bulletin',
+  name: 'BulletinDialog',
   data: function() {
-    return {
-      input_names: "",
-      showEdit: false
-    }
+    return {}
   },
   props: {
     bulletin: Object,
     address: String
   },
   methods: {
-    addQuote(bulletin) {
+    loadBulletin(hash) {
       this.$store.commit({
-        type: 'AddQuote',
-        address: bulletin.address,
-        sequence: bulletin.sequence,
-        hash: bulletin.hash
-      })
-    },
-    loadQuote(bulletin) {
-      this.$store.commit({
-        type: 'LoadQuote',
-        address: bulletin.address,
-        hash: bulletin.hash
+        type: 'LoadBulletin',
+        hash: hash
       })
     },
     openFile() {
@@ -83,15 +70,12 @@ export default {
         relay_address: relay_address
       })
     },
-    ...mapActions({
-      SwitchBBSession: 'SwitchBBSession'
-    })
+    ...mapActions({})
   },
   computed: {
     ...mapGetters({
       getNameByAddress: 'getNameByAddress',
-      currentBBSession: 'currentBBSession',
-      displayQuotes: 'displayQuotes'
+      displayBulletins: 'displayBulletins'
     })
   }
 }
