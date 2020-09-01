@@ -28,7 +28,7 @@
           </dd>
         </dl>
       </el-form>
-      <el-dialog ref="quote-list" title="公告详情" :visible.sync="dialogVisible" width="50%" @close='hideBulletin()'>
+      <el-dialog ref="quote-list" title="公告详情" :visible.sync="dialogVisible" width="80%" @close='hideBulletin()'>
         <ul class="quote-dialist">
           <BulletinDialog v-for="(bulletin,index) in displayBulletins" :bulletin="bulletin" :address="address" :key="index">
           </BulletinDialog>
@@ -104,71 +104,19 @@ export default {
 
 </script>
 <style scoped>
-.contact {
+.quotes-list {
+  padding-bottom: 4px;
   text-align: left;
-  padding-left: 20px;
 }
 
-.contact>>>.el-form-item__label {
-  height: 34px;
-  padding: 0;
+.quotes-list>>>.el-tag {
+  margin-bottom: 5px;
+  margin-right: 5px;
 }
 
-.contact>>>.el-form-item {
-  margin-bottom: 10px;
-}
-
-.contact-name-wrap {
-  display: inline-block;
-  font-weight: normal;
-  margin-right: 20px;
-  line-height: 28px;
-  width: 210px;
-}
-
-.contact-name {
-  display: inline-block;
-  max-width: 200px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  height: 28px;
-  line-height: 28px;
-  vertical-align: middle;
-}
-
-.contact-name a:hover {
-  color: #409eff;
-}
-
-.dllist {
-  padding-bottom: 10px;
-}
-
-.dl_title {
-  line-height: 34px;
-  font-weight: bold;
-}
-
-.dl_item {
-  line-height: 36px;
-}
-
-.contactOuter>>>.el-dialog__body {
-  padding: 10px 20px;
-}
-
-#tableWrap .el-button {
-  margin-bottom: 3px;
-}
-
-.el-button+.el-button {
-  margin-left: 0;
-}
-
-.contactOuter>>>.el-table td,
-.contactOuter>>>.el-table th {
-  padding: 5px 0;
+.quote-dialist {
+  max-height: 400px;
+  overflow-y: auto;
 }
 
 </style>

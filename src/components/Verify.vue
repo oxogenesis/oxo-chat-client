@@ -13,6 +13,9 @@
           <el-input type="text" name="json" v-model="result"></el-input>
         </el-form-item>
       </el-form>
+      <div>
+        <router-link class="link" to="/"><i class="el-icon-back"></i>返回首页</router-link>
+      </div>
     </div>
     <outer-footer />
   </div>
