@@ -1807,8 +1807,9 @@ function GenGroupMessage(msg_json, aes_key, to) {
   let group_hash = tmp_json.GroupHash
   let publicKey = tmp_json.PublicKey
 
-  delete tmp_json["ActionCode"]
+  //delete tmp_json["ActionCode"]
   delete tmp_json["GroupHash"]
+  delete tmp_json["PublicKey"]
 
   let msg = AesEncrypt(JSON.stringify(tmp_json), aes_key)
 
@@ -2037,10 +2038,11 @@ function SaveContentGroupMessage(SQL, group_hash, msgAddress, jsonTmp, timestamp
   })
 }
 
-function SaveGroupMessage(address, messageJson) {
+function SaveGroupMessage(relay_address, messageJson) {
   let group_hash = messageJson.GroupHash
+  let msgAddress = oxoKeyPairs.deriveAddress(messageJson.PublicKey)
   //check sender is a group member
-  let SQL = `SELECT * FROM GROUP_MEMBERS WHERE group_hash = '${group_hash}' AND address = '${address}'`
+  let SQL = `SELECT * FROM GROUP_MEMBERS WHERE group_hash = '${group_hash}' AND address = '${relay_address}'`
   state.DB.get(SQL, (err, sender) => {
     if (err) {
       console.log(err)
@@ -2049,8 +2051,6 @@ function SaveGroupMessage(address, messageJson) {
         //decrypt
         let content = AesDecrypt(messageJson.Message, sender.aes_key)
         let jsonTmp = JSON.parse(content)
-
-        let msgAddress = oxoKeyPairs.deriveAddress(jsonTmp.PublicKey)
 
         //message is from a group member
         let SQL = `SELECT * FROM GROUP_MEMBERS WHERE group_hash = '${group_hash}' AND address = '${msgAddress}'`
@@ -2068,7 +2068,7 @@ function SaveGroupMessage(address, messageJson) {
                   "Confirm": jsonTmp.Confirm,
                   "Content": jsonTmp.Content,
                   "Timestamp": jsonTmp.Timestamp,
-                  "PublicKey": jsonTmp.PublicKey,
+                  "PublicKey": messageJson.PublicKey,
                   "Signature": jsonTmp.Signature
                 }
               } else {
@@ -2078,7 +2078,7 @@ function SaveGroupMessage(address, messageJson) {
                   "PreHash": jsonTmp.PreHash,
                   "Content": jsonTmp.Content,
                   "Timestamp": jsonTmp.Timestamp,
-                  "PublicKey": jsonTmp.PublicKey,
+                  "PublicKey": messageJson.PublicKey,
                   "Signature": jsonTmp.Signature
                 }
               }
@@ -2093,16 +2093,17 @@ function SaveGroupMessage(address, messageJson) {
                     if (err) {
                       console.log(err)
                     } else {
+                      //Sync missing direct GroupMessage
                       if (item == null) {
                         //no pre-msg find
                         if (jsonTmp.Sequence != 1) {
                           //msg sequence not 1, drop, sync
-                          SyncGroupMessage(messageJson.GroupHash, msgAddress, 0, address)
+                          SyncGroupMessage(messageJson.GroupHash, msgAddress, 0, relay_address)
                           return
                         }
                       } else if (jsonTmp.Sequence != item.sequence + 1 || jsonTmp.PreHash != item.hash) {
                         // not match pre-msg, drop, sync
-                        SyncGroupMessage(messageJson.GroupHash, msgAddress, item.sequence, address)
+                        SyncGroupMessage(messageJson.GroupHash, msgAddress, item.sequence, relay_address)
                         return
                       }
 
@@ -2153,6 +2154,28 @@ function SaveGroupMessage(address, messageJson) {
                       }
                     }
                   })
+
+                  if (jsonAssemble.Confirm != null) {
+                    //Sync missing direct GroupMessage
+                    let confirmAddress = jsonAssemble.Confirm.Address
+                    let confirmSequence = jsonAssemble.Confirm.Sequence
+                    let confirmHash = jsonAssemble.Confirm.Hash
+                    SQL = `SELECT * FROM GROUP_MESSAGES WHERE group_hash = '${messageJson.GroupHash}' AND sour_address = '${confirmAddress}' ORDER BY sequence DESC`
+                    state.DB.get(SQL, (err, item) => {
+                      if (err) {
+                        console.log(err)
+                      } else {
+                        if (item == null) {
+                          SyncGroupMessage(messageJson.GroupHash, confirmAddress, 0, relay_address)
+                          return
+                        } else if (confirmSequence > item.sequence) {
+                          // not match pre-msg, drop, sync
+                          SyncGroupMessage(messageJson.GroupHash, confirmAddress, item.sequence, relay_address)
+                          return
+                        }
+                      }
+                    })
+                  }
                 }
               }
             }
@@ -2163,7 +2186,7 @@ function SaveGroupMessage(address, messageJson) {
   })
 }
 
-function SaveGroupManage(address, groupManageJson) {
+function SaveGroupManage(relay_address, groupManageJson) {
   let group_address = oxoKeyPairs.deriveAddress(groupManageJson.PublicKey)
   let strJson = JSON.stringify(groupManageJson)
   let hash = quarterSHA512(strJson)
@@ -2212,7 +2235,7 @@ function SaveGroupManage(address, groupManageJson) {
           } else if (groupManageJson.Sequence == gmanage.sequence) {
             return
           } else if (groupManageJson.Sequence > gmanage.sequence + 1) {
-            let strRequestJson = GenGroupManageRequest(group.session, gmanage.sequence, address)
+            let strRequestJson = GenGroupManageRequest(group.session, gmanage.sequence, relay_address)
             state.WS.send(strRequestJson)
             return
           } else if (groupManageJson.PreHash == gmanage.hash) {

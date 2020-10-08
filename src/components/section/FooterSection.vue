@@ -1,7 +1,7 @@
 <template>
   <div class="inner-footer">
     <footer>
-      <p>版本 0.1.0</p>
+      <p>版本 0.1.1</p>
       <p>@copyright 2019-2020</p>
     </footer>
   </div>
